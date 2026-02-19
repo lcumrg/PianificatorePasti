@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pianificatore Pasti</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FIREBASE -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Ottimizzazione Mobile */
+        input, select, textarea { font-size: 16px !important; } 
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        button { touch-action: manipulation; }
+
+        @media print {
+            body { background-color: white; font-size: 12px; }
+            #root { display: none; }
+            #print-area { display: block !important; }
+            @page { margin: 0.5cm; size: A4; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+        }
+        #print-area { display: none; }
+    </style>
+</head>
+<body>
+    <div id="root">Connessione al database in corso...</div>
+    <div id="print-area"></div>
+
+    <script type="text/babel">
+        // --- LA TUA CONFIGURAZIONE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD22DQRbG6ZEQZuR1qSQdkJVjaX_HdJMhA",
+            authDomain: "pianificatore-pasti.firebaseapp.com",
+            projectId: "pianificatore-pasti",
+            storageBucket: "pianificatore-pasti.firebasestorage.app",
+            messagingSenderId: "1065895114400",
+            appId: "1:1065895114400:web:26b5ed930ff9f74e5cfbc5"
+        };
+
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.firestore();
+        const DOC_ID = "famiglia_pasti"; 
+
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- ICONE ---
+        const Icons = {
+            Calendar: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>,
+            ShoppingCart: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>,
+            BookOpen: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>,
+            Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
+            Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+            Print: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>,
+            Left: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>,
+            Right: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>,
+            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+            Alert: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>,
+            Info: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+            FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        };
+
+        const MEAL_TYPES = ["1 (Pasta/Riso)", "2 (Carne)", "3 (Legumi/Cereali)", "4 (Pesce)", "F (Famiglia)", "LIBERO"];
+
+        // --- LINEE GUIDA DIETA ---
+        const DIET_GUIDELINES = {
+            '2': "200g CARNE + 200g Verdure + 40g riso / 60g pane",
+            '4': "200g SALMONE / 250g PESCE + 200g Verdure + 40g riso / 60g pane",
+            '1': "90g pasta / orzo / riso + 60g pesce o ragù o pesto + 200g verdure",
+            '3': "70g orzo / riso integrale / farro /avena + 40g legumi + 200g verdure"
+        };
+
+        // --- DATABASE RICETTE (Aggiornato dal tuo CSV) ---
+        const DEFAULT_RECIPES = [
+            { id: 1, type: "1", name: "Cous Cous Gamberetti e Zucchine", ingredients: [{ name: "Cous Cous", qty: 90, unit: "g" }, { name: "Gamberetti sgusciati", qty: 60, unit: "g" }, { name: "Zucchine", qty: 200, unit: "g" }] },
+            { id: 2, type: "1", name: "Cous cous POLLO e FUNGHI", ingredients: [{ name: "Cous Cous", qty: 90, unit: "g" }, { name: "Funghi", qty: 200, unit: "g" }, { name: "Pollo", qty: 150, unit: "g" }] },
+            { id: 3, type: "1", name: "Cous cous CECI e ZUCCHINE", ingredients: [{ name: "Cous Cous", qty: 90, unit: "g" }, { name: "Ceci cotti", qty: 150, unit: "g" }, { name: "Zucchine", qty: 200, unit: "g" }] },
+            { id: 4, type: "1", name: "Pasta in Bianco e Bastoncini con Carote", ingredients: [{ name: "Pasta", qty: 80, unit: "g" }, { name: "Bastoncini di Pesce", qty: 3, unit: "pz" }, { name: "Carote", qty: 150, unit: "g" }] },
+            { id: 5, type: "1", name: "Pasta al Pomodoro e Basilico", ingredients: [{ name: "Pasta", qty: 80, unit: "g" }, { name: "Passata di pomodoro", qty: 100, unit: "ml" }, { name: "Olio EVO", qty: 10, unit: "g" }] },
+            { id: 6, type: "1", name: "Riso con Pollo e Verdure", ingredients: [{ name: "Riso", qty: 80, unit: "g" }, { name: "Petto di pollo", qty: 100, unit: "g" }, { name: "Zucchine", qty: 100, unit: "g" }, { name: "Carote", qty: 50, unit: "g" }] },
+            { id: 7, type: "2", name: "Straccetti di tacchino con funghi trifolati e pane", ingredients: [{ name: "Fesa di tacchino", qty: 150, unit: "g" }, { name: "Funghi", qty: 200, unit: "g" }, { name: "Pane", qty: 60, unit: "g" }, { name: "Olio EVO", qty: 10, unit: "g" }] },
+            { id: 8, type: "2", name: "STRACCETTI di POLLO ai porri con RISO", ingredients: [{ name: "Petto di pollo", qty: 200, unit: "g" }, { name: "Porri", qty: 100, unit: "g" }, { name: "Riso", qty: 40, unit: "g" }] },
+            { id: 9, type: "2", name: "Macinato di pollo saltato con carote e zucchine e pane", ingredients: [{ name: "Macinato di pollo", qty: 150, unit: "g" }, { name: "Carote", qty: 100, unit: "g" }, { name: "Zucchine", qty: 100, unit: "g" }, { name: "Pane", qty: 60, unit: "g" }] },
+            { id: 10, type: "2", name: "BOCCONCINI di POLLO e Carote + RISO", ingredients: [{ name: "Petto di pollo", qty: 150, unit: "g"}, { name: "Carote", qty: 200, unit: "g"}, { name: "Riso", qty: 60, unit: "g"}] },
+            { id: 11, type: "2", name: "Bistecca di Manzo con Insalata", ingredients: [{ name: "Bistecca manzo", qty: 150, unit: "g" }, { name: "Insalata mista", qty: 150, unit: "g" }, { name: "Pane", qty: 60, unit: "g" }] },
+            { id: 12, type: "3", name: "Crema di ceci e zucca al rosmarino con farro", ingredients: [{ name: "Ceci cotti", qty: 150, unit: "g" }, { name: "Zucca", qty: 200, unit: "g" }, { name: "Farro", qty: 70, unit: "g" }, { name: "Rosmarino", qty: 1, unit: "qb" }] },
+            { id: 13, type: "3", name: "Bowl di Quinoa, Ceci speziati e Zucca", ingredients: [{ name: "Ceci cotti", qty: 150, unit: "g" }, { name: "Zucca", qty: 200, unit: "g" }, { name: "Quinoa", qty: 70, unit: "g" }] },
+            { id: 14, type: "3", name: "Pasta e Fagioli", ingredients: [{ name: "Pasta corta", qty: 70, unit: "g" }, { name: "Fagioli borlotti", qty: 150, unit: "g" }, { name: "Passata di pomodoro", qty: 50, unit: "ml" }] },
+            { id: 15, type: "3", name: "Lenticchie in umido con crostini", ingredients: [{ name: "Lenticchie cotte", qty: 150, unit: "g" }, { name: "Pane", qty: 60, unit: "g" }, { name: "Carote", qty: 50, unit: "g" }] },
+            { id: 16, type: "4", name: "Insalata di Mare Tiepida con Patate e Zucchine", ingredients: [{ name: "Misto mare", qty: 200, unit: "g" }, { name: "Patate", qty: 200, unit: "g" }, { name: "Zucchine", qty: 150, unit: "g" }] },
+            { id: 17, type: "4", name: "Salmone al forno al rosmarino con zucca e riso", ingredients: [{ name: "Salmone fresco", qty: 200, unit: "g" }, { name: "Zucca", qty: 200, unit: "g" }, { name: "Riso", qty: 40, unit: "g" }] },
+            { id: 18, type: "4", name: "CREMA di CAROTE e ZENZERO con NASELLO", ingredients: [{ name: "Nasello", qty: 250, unit: "g" }, { name: "Carote", qty: 200, unit: "g" }, { name: "Zenzero", qty: 1, unit: "qb" }, { name: "Pane", qty: 60, unit: "g" }] },
+            { id: 19, type: "4", name: "Orata al Cartoccio con Patate", ingredients: [{ name: "Orata filetti", qty: 200, unit: "g" }, { name: "Patate", qty: 200, unit: "g" }, { name: "Pomodorini", qty: 50, unit: "g" }] },
+            { id: 20, type: "F", name: "Pizza fatta in casa", ingredients: [{ name: "Farina", qty: 150, unit: "g" }, { name: "Mozzarella per pizza", qty: 100, unit: "g" }, { name: "Passata di pomodoro", qty: 80, unit: "g" }] },
+            { id: 21, type: "F", name: "Lasagne al forno", ingredients: [{ name: "Sfoglia lasagne", qty: 100, unit: "g" }, { name: "Macinato misto", qty: 100, unit: "g" }, { name: "Besciamella", qty: 50, unit: "ml" }] }
+        ];
+
+        const DEFAULT_PLAN = [
+          { day: "Lunedì", meal: "Pranzo", type: "2 (Carne)", myRecipe: "Straccetti di tacchino...", myPortions: 1, famRecipe: "Straccetti di tacchino...", famPortions: 2 },
+          { day: "Lunedì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: "Crema di ceci...", myPortions: 1, famRecipe: "Crema di ceci...", famPortions: 5 },
+          { day: "Martedì", meal: "Pranzo", type: "4 (Pesce)", myRecipe: "Insalata di Mare...", myPortions: 1, famRecipe: "Insalata di Mare...", famPortions: 2 },
+          { day: "Martedì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: "Crema di ceci...", myPortions: 1, famRecipe: "Cous Cous...", famPortions: 5 },
+          { day: "Mercoledì", meal: "Pranzo", type: "1 (Pasta/Riso)", myRecipe: "Cous Cous...", myPortions: 1, famRecipe: "Cous Cous...", famPortions: 2 },
+          { day: "Mercoledì", meal: "Cena", type: "4 (Pesce)", myRecipe: "Salmone...", myPortions: 1, famRecipe: "Pasta in Bianco...", famPortions: 5 },
+          { day: "Giovedì", meal: "Pranzo", type: "2 (Carne)", myRecipe: "STRACCETTI...", myPortions: 1, famRecipe: "Macinato...", famPortions: 2 },
+          { day: "Giovedì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: "Crema di ceci...", myPortions: 1, famRecipe: "Crema di ceci...", famPortions: 4 },
+          { day: "Venerdì", meal: "Pranzo", type: "2 (Carne)", myRecipe: "BOCCONCINI...", myPortions: 1, famRecipe: "BOCCONCINI...", famPortions: 3 },
+          { day: "Venerdì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: "Crema di ceci...", myPortions: 1, famRecipe: "Pasta in Bianco...", famPortions: 4 },
+          { day: "Sabato", meal: "Pranzo", type: "4 (Pesce)", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 2 },
+          { day: "Sabato", meal: "Cena", type: "LIBERO", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 4 },
+          { day: "Domenica", meal: "Pranzo", type: "LIBERO", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 2 },
+          { day: "Domenica", meal: "Cena", type: "LIBERO", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 4 },
+        ];
+
+        // --- VALIDATORE DIETA ---
+        const DIET_TARGETS = {
+            '2': { label: 'Carne', target: 4, color: 'red' },
+            '3': { label: 'Legumi', target: 4, color: 'amber' },
+            '1': { label: 'Pasta/Riso', target: 2, color: 'blue' },
+            '4': { label: 'Pesce', target: 3, color: 'cyan' }
+        };
+
+        const DietValidator = ({ plan }) => {
+            const counts = { '1': 0, '2': 0, '3': 0, '4': 0 };
+            const conflicts = [];
+
+            for (let i = 0; i < plan.length; i += 2) {
+                const lunch = plan[i];
+                const dinner = plan[i+1];
+                const t1 = lunch.type.split(' ')[0];
+                const t2 = dinner.type.split(' ')[0];
+
+                if (counts[t1] !== undefined) counts[t1]++;
+                if (counts[t2] !== undefined) counts[t2]++;
+
+                if ((t1 === '2' && t2 === '4') || (t1 === '4' && t2 === '2')) {
+                    conflicts.push(lunch.day);
+                }
+            }
+
+            return (
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
+                    <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                        <Icons.Check /> Controllo Dieta
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        {Object.entries(DIET_TARGETS).map(([key, data]) => {
+                            const count = counts[key];
+                            const isExact = count === data.target;
+                            const isOver = count > data.target;
+                            const statusColor = isExact ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 
+                                              isOver ? 'bg-red-100 text-red-800 border-red-200' : 
+                                              'bg-slate-100 text-slate-600 border-slate-200';
+                            return (
+                                <div key={key} className={`border rounded-lg p-2 flex flex-col items-center ${statusColor}`}>
+                                    <span className="text-xs font-bold uppercase">{data.label}</span>
+                                    <span className="text-lg font-black">{count}/{data.target}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {conflicts.length > 0 && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3">
+                            <div className="text-red-500 mt-1"><Icons.Alert /></div>
+                            <div>
+                                <strong className="text-red-800 text-sm block">Conflitto Carne/Pesce rilevato!</strong>
+                                <p className="text-red-600 text-xs">Non puoi mangiare carne e pesce lo stesso giorno: {conflicts.join(', ')}.</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- HELPERS DATE ---
+        const getMonday = (d) => {
+            d = new Date(d);
+            const day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1); 
+            return new Date(d.setDate(diff));
+        }
+        const formatDateKey = (date) => date.toISOString().split('T')[0];
+        const formatDateDisplay = (dateStr) => new Date(dateStr).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+        const getDatesOfWeek = (start) => Array.from({length: 7}, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+
+        // --- HELPERS STAMPA ---
+        const getIngredientsSummary = (recipeName, portions, recipes) => {
+            if (!recipeName || portions <= 0) return null;
+            const rec = recipes.find(r => r.name === recipeName);
+            if (!rec) return null;
+            return rec.ingredients.map(ing => `${ing.name}: ${ing.qty * portions}${ing.unit}`).join(', ');
+        };
+
+        // --- COMPONENTI UI ---
+        const Card = ({ children, className = "" }) => <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>{children}</div>;
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center p-4 border-b">
+                            <h3 className="font-bold text-lg">{title}</h3>
+                            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full"><Icons.X /></button>
+                        </div>
+                        <div className="p-4 overflow-y-auto">{children}</div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- FORM RICETTA ---
+        const RecipeForm = ({ onSave, initialData }) => {
+            const [recipeData, setRecipeData] = useState(initialData || { name: '', type: '1', ingredients: [] });
+            const [tempIng, setTempIng] = useState({ name: '', qty: '', unit: 'g' });
+
+            useEffect(() => {
+                setRecipeData(initialData || { name: '', type: '1', ingredients: [] });
+                setTempIng({ name: '', qty: '', unit: 'g' });
+            }, [initialData]);
+
+            const addIngredient = () => {
+                if (!tempIng.name || !tempIng.qty) return;
+                const qtyNum = parseFloat(tempIng.qty.toString().replace(',', '.'));
+                if (isNaN(qtyNum)) return;
+                setRecipeData(prev => ({ ...prev, ingredients: [...prev.ingredients, { ...tempIng, qty: qtyNum }] }));
+                setTempIng({ name: '', qty: '', unit: 'g' });
+            };
+
+            const handleSave = () => {
+                if (!recipeData.name) { alert("Nome ricetta obbligatorio"); return; }
+                let finalIngredients = [...recipeData.ingredients];
+                if (tempIng.name && tempIng.qty) {
+                     const qtyNum = parseFloat(tempIng.qty.toString().replace(',', '.'));
+                     if (!isNaN(qtyNum)) finalIngredients.push({ ...tempIng, qty: qtyNum });
+                }
+                onSave({ ...recipeData, ingredients: finalIngredients });
+            };
+
+            const guideline = DIET_GUIDELINES[recipeData.type];
+
+            return (
+                <div className="space-y-4 flex flex-col h-full">
+                    <div className="flex-1 space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold mb-1">Nome Piatto</label>
+                            <input className="w-full border rounded p-2" value={recipeData.name} onChange={e => setRecipeData({...recipeData, name: e.target.value})} placeholder="Es. Pasta al Pomodoro" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold mb-1">Tipologia</label>
+                            <select className="w-full border rounded p-2" value={recipeData.type} onChange={e => setRecipeData({...recipeData, type: e.target.value})}>
+                                {MEAL_TYPES.map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
+                            </select>
+                        </div>
+
+                        {guideline && (
+                            <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded text-xs text-blue-800 mb-2 flex gap-2">
+                                <div className="mt-0.5"><Icons.Info /></div>
+                                <div>
+                                    <strong>Promemoria Dosi:</strong><br/>
+                                    {guideline}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-50 p-3 rounded">
+                            <h4 className="text-sm font-bold mb-2">Ingredienti</h4>
+                            
+                            <div className="flex flex-col gap-2 mb-3">
+                                <input 
+                                    className="w-full border rounded p-2 text-sm" 
+                                    placeholder="Nome Ingrediente" 
+                                    value={tempIng.name} 
+                                    onChange={e => setTempIng({...tempIng, name: e.target.value})} 
+                                />
+                                <div className="flex gap-2">
+                                    <input 
+                                        className="w-24 border rounded p-2 text-sm" 
+                                        type="text" 
+                                        inputMode="decimal" 
+                                        placeholder="Qtà" 
+                                        value={tempIng.qty} 
+                                        onChange={e => setTempIng({...tempIng, qty: e.target.value})} 
+                                    />
+                                    <select 
+                                        className="w-20 border rounded text-sm bg-white" 
+                                        value={tempIng.unit} 
+                                        onChange={e => setTempIng({...tempIng, unit: e.target.value})}
+                                    >
+                                        <option value="g">g</option>
+                                        <option value="ml">ml</option>
+                                        <option value="pz">pz</option>
+                                        <option value="qb">qb</option>
+                                    </select>
+                                    <button 
+                                        onClick={addIngredient} 
+                                        className="flex-grow bg-emerald-600 text-white rounded-lg font-bold shadow-sm hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center"
+                                        title="Aggiungi Ingrediente"
+                                    >
+                                        <span className="flex items-center gap-1">
+                                            <Icons.Plus /> 
+                                            <span className="text-sm">Aggiungi</span>
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <ul className="text-sm space-y-1 mt-3">
+                                {recipeData.ingredients.map((ing, idx) => (
+                                    <li key={idx} className="flex justify-between bg-white p-2 rounded border border-slate-100 items-center shadow-sm">
+                                        <span>{ing.name} ({ing.qty}{ing.unit})</span>
+                                        <button onClick={() => setRecipeData(p => ({...p, ingredients: p.ingredients.filter((_,i)=>i!==idx)}))} className="text-red-500 font-bold px-2 hover:bg-red-50 rounded">x</button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="pt-4 mt-auto border-t border-slate-100 sticky bottom-0 bg-white">
+                        <button onClick={handleSave} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg shadow-md active:translate-y-0.5 transition-all">{initialData ? "Salva Modifiche" : "Crea Ricetta"}</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const PlannerView = ({ plan, updatePlan, recipes, mealTypes, currentWeek, changeWeek, resetData, handlePrint }) => {
+            const weekDates = getDatesOfWeek(currentWeek);
+            return (
+                <div className="space-y-6 pb-20">
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                        <div className="flex items-center gap-4 bg-white p-2 rounded-full shadow-sm">
+                            <button onClick={() => changeWeek(-7)} className="p-2 hover:bg-slate-100 rounded-full"><Icons.Left /></button>
+                            <span className="font-bold text-slate-700 min-w-[150px] text-center">{formatDateDisplay(currentWeek)}</span>
+                            <button onClick={() => changeWeek(7)} className="p-2 hover:bg-slate-100 rounded-full"><Icons.Right /></button>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Print /> Stampa</button>
+                            <button onClick={resetData} className="text-xs text-red-500 underline hover:text-red-700">Reset Default</button>
+                        </div>
+                    </div>
+
+                    <DietValidator plan={plan} />
+
+                    <div className="grid grid-cols-1 gap-6">
+                        {Array.from({ length: 7 }).map((_, i) => {
+                            const dateObj = weekDates[i];
+                            const lunchIndex = i * 2;
+                            const dinnerIndex = i * 2 + 1;
+                            const lunch = plan[lunchIndex];
+                            const dinner = plan[dinnerIndex];
+
+                            const myRecipesLunch = recipes.filter(r => r.type === lunch.type.split(' ')[0] || lunch.type === 'LIBERO');
+                            const myRecipesDinner = recipes.filter(r => r.type === dinner.type.split(' ')[0] || dinner.type === 'LIBERO');
+                            const familyRecipes = recipes.sort((a,b) => a.name.localeCompare(b.name));
+
+                            return (
+                                <Card key={i} className="p-4 border-l-4 border-l-slate-400">
+                                    <div className="flex flex-col gap-4">
+                                        <div className="border-b border-slate-100 pb-2 mb-1">
+                                            <span className="font-bold text-lg text-slate-800 capitalize">{dateObj.toLocaleDateString('it-IT', {weekday: 'long'})}</span>
+                                            <span className="text-slate-400 ml-2 text-sm">{dateObj.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}</span>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* PRANZO */}
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
+                                                    <span className="font-bold text-sm text-slate-600">PRANZO</span>
+                                                    <select value={lunch.type} onChange={(e) => updatePlan(lunchIndex, 'type', e.target.value)} className="text-xs bg-white border border-slate-200 rounded px-1 py-0.5 outline-none font-medium">
+                                                        {mealTypes.filter(t => t !== "F (Famiglia)").map(t => <option key={t} value={t}>{t}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
+                                                    <div className="text-xs font-bold text-blue-600 w-8">Dieta</div>
+                                                    <div className="flex gap-1">
+                                                        <select value={lunch.myRecipe} onChange={(e) => updatePlan(lunchIndex, 'myRecipe', e.target.value)} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
+                                                            <option value="">-- Seleziona --</option>
+                                                            {myRecipesLunch.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                                                        </select>
+                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={lunch.myPortions} onChange={(e) => updatePlan(lunchIndex, 'myPortions', parseFloat(e.target.value))} />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
+                                                    <div className="text-xs font-bold text-orange-600 w-8">Fam.</div>
+                                                    <div className="flex gap-1">
+                                                        <select value={lunch.famRecipe} onChange={(e) => updatePlan(lunchIndex, 'famRecipe', e.target.value)} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
+                                                            <option value="">-- Seleziona --</option>
+                                                            {familyRecipes.map(r => <option key={r.id} value={r.name}>{r.type === 'F' ? '★ ' : ''}{r.name}</option>)}
+                                                        </select>
+                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={lunch.famPortions} onChange={(e) => updatePlan(lunchIndex, 'famPortions', parseFloat(e.target.value))} />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* CENA */}
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
+                                                    <span className="font-bold text-sm text-slate-600">CENA</span>
+                                                    <select value={dinner.type} onChange={(e) => updatePlan(dinnerIndex, 'type', e.target.value)} className="text-xs bg-white border border-slate-200 rounded px-1 py-0.5 outline-none font-medium">
+                                                        {mealTypes.filter(t => t !== "F (Famiglia)").map(t => <option key={t} value={t}>{t}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
+                                                    <div className="text-xs font-bold text-blue-600 w-8">Dieta</div>
+                                                    <div className="flex gap-1">
+                                                        <select value={dinner.myRecipe} onChange={(e) => updatePlan(dinnerIndex, 'myRecipe', e.target.value)} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
+                                                            <option value="">-- Seleziona --</option>
+                                                            {myRecipesDinner.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                                                        </select>
+                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={dinner.myPortions} onChange={(e) => updatePlan(dinnerIndex, 'myPortions', parseFloat(e.target.value))} />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
+                                                    <div className="text-xs font-bold text-orange-600 w-8">Fam.</div>
+                                                    <div className="flex gap-1">
+                                                        <select value={dinner.famRecipe} onChange={(e) => updatePlan(dinnerIndex, 'famRecipe', e.target.value)} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
+                                                            <option value="">-- Seleziona --</option>
+                                                            {familyRecipes.map(r => <option key={r.id} value={r.name}>{r.type === 'F' ? '★ ' : ''}{r.name}</option>)}
+                                                        </select>
+                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={dinner.famPortions} onChange={(e) => updatePlan(dinnerIndex, 'famPortions', parseFloat(e.target.value))} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        const ShoppingListView = ({ shoppingList, handleCopy, checkedItems, toggleCheck }) => (
+            <div className="space-y-6 pb-20">
+                 <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-slate-800">Lista Spesa</h2>
+                    <button onClick={handleCopy} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">Copia Tutto</button>
+                </div>
+                <div className="bg-white rounded-xl shadow p-0 overflow-hidden">
+                     {shoppingList.length === 0 ? <div className="p-8 text-center text-slate-400">Lista vuota.</div> : shoppingList.map((item, idx) => (
+                        <div key={idx} onClick={() => toggleCheck(item.name)} className={`flex justify-between p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 ${checkedItems[item.name] ? 'bg-slate-50 opacity-40' : ''}`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${checkedItems[item.name] ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                                    {checkedItems[item.name] && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                                </div>
+                                <span className={checkedItems[item.name] ? 'line-through text-slate-400' : 'text-slate-800'}>{item.name}</span>
+                            </div>
+                            <span className="font-bold text-slate-600 text-sm bg-slate-100 px-2 py-1 rounded">{item.qty} {item.unit}</span>
+                        </div>
+                     ))}
+                </div>
+                <div className="text-center text-xs text-slate-400">Sincronizzazione Cloud Attiva</div>
+            </div>
+        );
+
+        const RecipesView = ({ recipes, deleteRecipe, onAddRecipe, onEditRecipe, onImportRecipes }) => {
+            const [filter, setFilter] = useState('ALL');
+            const fileInputRef = useRef(null); // Ref for file input
+
+            const filteredRecipes = useMemo(() => {
+                if (filter === 'ALL') return recipes;
+                return recipes.filter(r => r.type === filter);
+            }, [recipes, filter]);
+
+            const handleImportClick = () => {
+                fileInputRef.current.click();
+            };
+
+            const handleFileChange = (e) => {
+                onImportRecipes(e);
+            };
+
+            return (
+                <div className="space-y-6 pb-20">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-slate-800">Database</h2>
+                        <div className="flex gap-2">
+                            {/* Import Button */}
+                            <input 
+                                type="file" 
+                                accept=".csv" 
+                                ref={fileInputRef} 
+                                style={{display: 'none'}} 
+                                onChange={handleFileChange} 
+                            />
+                            <button onClick={handleImportClick} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-300 flex items-center gap-2">
+                                <Icons.Upload /> <span className="hidden md:inline">Importa</span>
+                            </button>
+
+                            <button onClick={() => exportRecipesCSV()} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-300 flex items-center gap-2">
+                                <Icons.Download /> <span className="hidden md:inline">Esporta</span>
+                            </button>
+                            <button onClick={onAddRecipe} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-emerald-700">+ Nuova</button>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                        <button onClick={() => setFilter('ALL')} className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>Tutti</button>
+                        {MEAL_TYPES.map(typeStr => {
+                            const typeKey = typeStr.split(' ')[0];
+                            const label = typeStr.includes('(') ? typeStr.split('(')[1].replace(')', '') : typeStr;
+                            if (typeStr === 'LIBERO') return null;
+                            return (
+                                <button key={typeKey} onClick={() => setFilter(typeKey)} className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filter === typeKey ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>{label}</button>
+                            );
+                        })}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredRecipes.map(recipe => (
+                            <Card key={recipe.id} className="flex flex-col h-full relative group">
+                                <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-start">
+                                    <div>
+                                        <div className="font-bold text-slate-800 pr-2">{recipe.name}</div>
+                                        <div className={`text-xs inline-block px-2 py-0.5 rounded mt-1 font-bold ${recipe.type === 'F' ? 'bg-orange-200 text-orange-800' : 'bg-slate-200 text-slate-500'}`}>
+                                            Tipo: {MEAL_TYPES.find(t => t.startsWith(recipe.type)) || 'N/D'}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => onEditRecipe(recipe)} className="text-slate-400 hover:text-blue-500"><Icons.Edit /></button>
+                                        <button onClick={() => deleteRecipe(recipe.id)} className="text-slate-400 hover:text-red-500"><Icons.Trash /></button>
+                                    </div>
+                                </div>
+                                <div className="p-4 flex-grow">
+                                    <ul className="space-y-2 text-sm">
+                                        {recipe.ingredients.map((ing, i) => <li key={i} className="flex justify-between border-b border-slate-50 pb-1 last:border-0"><span className="text-slate-600">{ing.name}</span><span className="font-medium text-slate-400">{ing.qty} {ing.unit}</span></li>)}
+                                    </ul>
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- APP PRINCIPALE ---
+        function App() {
+            const [activeTab, setActiveTab] = useState('plan');
+            const [syncStatus, setSyncStatus] = useState('loading'); 
+            const [lastSaveTime, setLastSaveTime] = useState(null); 
+            
+            const [recipes, setRecipes] = useState(DEFAULT_RECIPES);
+            const [checkedItems, setCheckedItems] = useState({});
+            
+            const [currentWeekStart, setCurrentWeekStart] = useState(getMonday(new Date()));
+            const [weeklyPlans, setWeeklyPlans] = useState({}); 
+            const currentWeekKey = formatDateKey(currentWeekStart);
+            const plan = weeklyPlans[currentWeekKey] || DEFAULT_PLAN; 
+
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingRecipe, setEditingRecipe] = useState(null); 
+
+            useEffect(() => {
+                if(!db) return;
+                const unsubscribe = db.collection('app_pasti').doc(DOC_ID)
+                    .onSnapshot((doc) => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            if (data.recipes) setRecipes(data.recipes);
+                            if (data.checkedItems) setCheckedItems(data.checkedItems);
+                            if (data.weeklyPlans) setWeeklyPlans(data.weeklyPlans);
+                            else if (data.plan) setWeeklyPlans({ [currentWeekKey]: data.plan });
+                            
+                            if (data.lastUpdate) {
+                                const date = new Date(data.lastUpdate);
+                                setLastSaveTime(date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                            }
+                            setSyncStatus('saved');
+                        } else {
+                            const initialPlans = { [currentWeekKey]: DEFAULT_PLAN };
+                            saveToCloud({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {} });
+                        }
+                    }, (error) => { console.error("Errore Sync:", error); setSyncStatus('error'); });
+                return () => unsubscribe();
+            }, []);
+
+            const saveToCloud = (dataToUpdate) => {
+                if(!db) return;
+                setSyncStatus('sync');
+                const fullData = { recipes, checkedItems, weeklyPlans, lastUpdate: new Date().toISOString(), ...dataToUpdate };
+                db.collection('app_pasti').doc(DOC_ID).set(fullData)
+                    .then(() => setTimeout(() => setSyncStatus('saved'), 500))
+                    .catch((err) => { console.error(err); setSyncStatus('error'); });
+            };
+
+            const changeWeek = (days) => {
+                const newDate = new Date(currentWeekStart);
+                newDate.setDate(newDate.getDate() + days);
+                setCurrentWeekStart(newDate);
+            };
+
+            const updatePlan = (index, field, value) => {
+                const newPlan = [...plan];
+                newPlan[index][field] = value;
+                if (field === 'type') { newPlan[index].myRecipe = ""; }
+                const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: newPlan };
+                setWeeklyPlans(newWeeklyPlans);
+                saveToCloud({ weeklyPlans: newWeeklyPlans });
+            };
+
+            const toggleCheck = (name) => {
+                const newChecked = { ...checkedItems, [name]: !checkedItems[name] };
+                setCheckedItems(newChecked);
+                saveToCloud({ checkedItems: newChecked });
+            };
+
+            const handleEditRecipe = (recipeToEdit) => {
+                setEditingRecipe(recipeToEdit);
+                setIsModalOpen(true);
+            };
+
+            const handleAddRecipe = () => {
+                setEditingRecipe(null); 
+                setIsModalOpen(true);
+            };
+
+            const saveRecipeFromForm = (formData) => {
+                let updatedRecipes;
+                if (formData.id) updatedRecipes = recipes.map(r => r.id === formData.id ? formData : r);
+                else updatedRecipes = [...recipes, { ...formData, id: Date.now() }];
+                setRecipes(updatedRecipes);
+                saveToCloud({ recipes: updatedRecipes });
+                setIsModalOpen(false);
+                setEditingRecipe(null);
+            };
+
+            const deleteRecipe = (id) => {
+                if(confirm("Eliminare ricetta per tutti?")) {
+                    const newRecipes = recipes.filter(r => r.id !== id);
+                    setRecipes(newRecipes);
+                    saveToCloud({ recipes: newRecipes });
+                }
+            };
+
+            const resetData = () => {
+                if(confirm("ATTENZIONE: Questo cancellerà le tue modifiche attuali e ripristinerà il database predefinito. Sei sicuro?")) {
+                    const initialPlans = { [currentWeekKey]: DEFAULT_PLAN };
+                    saveToCloud({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {} });
+                    alert("Database ripristinato!");
+                }
+            };
+
+            // Funzione Esportazione CSV
+            window.exportRecipesCSV = () => {
+                const headers = ["ID", "Tipo", "Nome", "Ingredienti"];
+                const rows = recipes.map(r => {
+                    const ingStr = r.ingredients.map(i => `${i.name} ${i.qty}${i.unit}`).join('; ');
+                    const safeName = `"${r.name.replace(/"/g, '""')}"`;
+                    const safeIng = `"${ingStr.replace(/"/g, '""')}"`;
+                    return [r.id, r.type, safeName, safeIng].join(',');
+                });
+                const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `ricette_backup_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // Funzione Importazione CSV
+            const handleImportRecipes = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (!confirm("ATTENZIONE: L'importazione sovrascriverà le ricette attuali con quelle del file CSV. Vuoi continuare?")) {
+                    e.target.value = null; // Reset input
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const csvText = event.target.result;
+                        const lines = csvText.split('\n').filter(l => l.trim() !== '');
+                        const newRecipes = [];
+
+                        // Skip header (row 0)
+                        for (let i = 1; i < lines.length; i++) {
+                            const line = lines[i];
+                            // Regex robusta per CSV che gestisce le virgole dentro le virgolette
+                            const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                            
+                            // Ci aspettiamo almeno 4 colonne: ID, Tipo, Nome, Ingredienti
+                            // Nota: la regex sopra potrebbe non catturare campi vuoti correttamente in tutti i casi edge, 
+                            // ma funziona per il formato export generato.
+                            // Un approccio più semplice per il nostro formato specifico:
+                            // ID e Tipo sono numeri/semplici. Nome e Ingredienti sono virgolettati.
+                            
+                            // Usiamo una logica di split più manuale per sicurezza sui dati generati
+                            // ID,Tipo,"Nome","Ing..."
+                            const firstComma = line.indexOf(',');
+                            const secondComma = line.indexOf(',', firstComma + 1);
+                            const firstQuote = line.indexOf('"');
+                            
+                            if (firstComma === -1 || secondComma === -1) continue;
+
+                            const id = parseInt(line.substring(0, firstComma));
+                            const type = line.substring(firstComma + 1, secondComma);
+                            
+                            // Parsare Nome e Ingredienti (assumendo siano tra virgolette)
+                            // Trova la parte dopo il secondo comma
+                            const rest = line.substring(secondComma + 1).trim();
+                            // Regex per estrarre due stringhe tra virgolette separate da virgola
+                            const parts = rest.match(/"([^"]*)"\s*,\s*"([^"]*)"/);
+                            
+                            let name = "";
+                            let ingStr = "";
+
+                            if (parts && parts.length >= 3) {
+                                name = parts[1].replace(/""/g, '"');
+                                ingStr = parts[2].replace(/""/g, '"');
+                            } else {
+                                // Fallback se il formato non è standard (es. editato a mano senza quotes)
+                                // Questo è rischioso, ma proviamo
+                                const simpleParts = rest.split(',');
+                                name = simpleParts[0];
+                                ingStr = simpleParts.slice(1).join(',');
+                            }
+
+                            // Parsare ingredienti: "Pasta 80g; Pomodoro 100ml"
+                            const ingredients = [];
+                            if (ingStr) {
+                                const ingItems = ingStr.split(';');
+                                ingItems.forEach(item => {
+                                    item = item.trim();
+                                    // Regex: Nome QuantitàUnità (es. "Pasta 80g" o "Olio 10ml")
+                                    // Cerca l'ultima parte numerica+testo
+                                    const match = item.match(/^(.*)\s+(\d+(?:[.,]\d+)?)([a-zA-Z]+)$/);
+                                    if (match) {
+                                        ingredients.push({
+                                            name: match[1].trim(),
+                                            qty: parseFloat(match[2].replace(',', '.')),
+                                            unit: match[3]
+                                        });
+                                    }
+                                });
+                            }
+
+                            if (name) {
+                                newRecipes.push({
+                                    id: id || Date.now() + i, // Mantieni ID o genera nuovo
+                                    type: type.toString(),
+                                    name: name,
+                                    ingredients: ingredients
+                                });
+                            }
+                        }
+
+                        if (newRecipes.length > 0) {
+                            setRecipes(newRecipes);
+                            saveToCloud({ recipes: newRecipes });
+                            alert(`Importazione completata! Caricate ${newRecipes.length} ricette.`);
+                        } else {
+                            alert("Nessuna ricetta valida trovata nel file CSV.");
+                        }
+
+                    } catch (err) {
+                        console.error("Errore importazione CSV:", err);
+                        alert("Errore durante la lettura del file CSV.");
+                    }
+                    e.target.value = null; // Reset input
+                };
+                reader.readAsText(file);
+            };
+
+            const handlePrint = () => {
+                const printArea = document.getElementById('print-area');
+                const dates = getDatesOfWeek(currentWeekStart);
+                const printHTML = `
+                    <div style="font-family: sans-serif; color: #333;">
+                        <h1 style="text-align: center; margin-bottom: 20px;">Menu Settimanale: ${formatDateDisplay(currentWeekStart)}</h1>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead>
+                                <tr style="background: #eee;">
+                                    <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 10%;">Giorno</th>
+                                    <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 45%;">Dieta</th>
+                                    <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 45%;">Famiglia</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${plan.map((slot, i) => {
+                                    const date = dates[Math.floor(i/2)];
+                                    const dateStr = date.toLocaleDateString('it-IT', {weekday:'short', day:'numeric'});
+                                    const rowStyle = i % 2 === 0 ? 'border-top: 2px solid #aaa;' : 'border-bottom: 1px solid #ddd;';
+                                    const mealLabel = slot.meal.toUpperCase();
+                                    
+                                    const myIng = getIngredientsSummary(slot.myRecipe, slot.myPortions, recipes);
+                                    const famIng = getIngredientsSummary(slot.famRecipe, slot.famPortions, recipes);
+
+                                    return `
+                                        <tr style="${rowStyle}">
+                                            <td style="padding: 5px; border-right: 1px solid #ccc; vertical-align: top;">
+                                                <strong>${i%2===0 ? dateStr : ''}</strong>
+                                                <div style="font-size: 0.8em; color: #666; margin-top: 2px;">${mealLabel}</div>
+                                            </td>
+                                            <td style="padding: 5px; border-right: 1px solid #ccc; vertical-align: top;">
+                                                <div style="font-weight: bold;">${slot.myRecipe || '-'}</div>
+                                                <div style="font-size: 0.8em;">${slot.type}</div>
+                                                ${myIng ? `<div style="font-size: 0.8em; color: #555; margin-top: 2px; font-style: italic;">(${myIng})</div>` : ''}
+                                            </td>
+                                            <td style="padding: 5px; vertical-align: top;">
+                                                <div style="font-weight: bold;">${slot.famRecipe || '-'}</div>
+                                                ${famIng ? `<div style="font-size: 0.8em; color: #555; margin-top: 2px; font-style: italic;">(${famIng})</div>` : ''}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                printArea.innerHTML = printHTML;
+                window.print();
+            };
+
+            const shoppingList = useMemo(() => {
+                const list = {};
+                plan.forEach(slot => {
+                    const myRec = recipes.find(r => r.name === slot.myRecipe);
+                    if (myRec) {
+                        myRec.ingredients.forEach(ing => {
+                            const key = `${ing.name} (${ing.unit})`;
+                            if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
+                            list[key].qty += ing.qty * slot.myPortions;
+                        });
+                    }
+                    const famRec = recipes.find(r => r.name === slot.famRecipe);
+                    if (famRec) {
+                        famRec.ingredients.forEach(ing => {
+                            const key = `${ing.name} (${ing.unit})`;
+                            if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
+                            list[key].qty += ing.qty * slot.famPortions;
+                        });
+                    }
+                });
+                return Object.values(list).sort((a, b) => a.name.localeCompare(b.name));
+            }, [plan, recipes]);
+
+            const handleCopy = () => {
+                const text = shoppingList.map(item => `- ${item.name}: ${item.qty} ${item.unit}`).join('\n');
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); alert("Copiato!"); } catch (e) {}
+                document.body.removeChild(ta);
+            };
+
+            if (syncStatus === 'loading' && !db) return <div className="flex h-screen items-center justify-center p-8 text-center text-slate-500">In attesa di connessione...<br/>Controlla la config.</div>;
+
+            return (
+                <div className="min-h-screen bg-slate-50 p-2 md:p-8 font-sans pb-24 md:pb-8">
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        <header className="flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Pianificatore Pasti</h1>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className={`w-2 h-2 rounded-full ${syncStatus === 'saved' ? 'bg-emerald-500' : syncStatus === 'error' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'}`}></div>
+                                        <p className="text-xs text-slate-500 font-medium">
+                                            {syncStatus === 'saved' ? `Salvato alle ${lastSaveTime || '...'}` : syncStatus === 'sync' ? 'Salvataggio...' : 'Errore Sync'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={resetData} className="p-2 hover:bg-slate-100 rounded-full text-slate-600" title="Reset Impostazioni"><Icons.Settings /></button>
+                                </div>
+                            </div>
+                            
+                            {/* NEW TOP NAVIGATION */}
+                            <div className="flex gap-2 border-t pt-2">
+                                <button onClick={() => setActiveTab('plan')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'plan' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <Icons.Calendar /> Planner
+                                </button>
+                                <button onClick={() => setActiveTab('shop')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'shop' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <Icons.ShoppingCart /> Spesa
+                                </button>
+                                <button onClick={() => setActiveTab('recipes')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'recipes' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <Icons.BookOpen /> Ricette
+                                </button>
+                            </div>
+                        </header>
+                        
+                        <main className="animate-fade-in">
+                            {activeTab === 'plan' && <PlannerView 
+                                plan={plan} 
+                                updatePlan={updatePlan} 
+                                recipes={recipes} 
+                                mealTypes={MEAL_TYPES} 
+                                currentWeek={currentWeekStart}
+                                changeWeek={changeWeek}
+                                resetData={resetData}
+                                handlePrint={handlePrint}
+                            />}
+                            {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={checkedItems} toggleCheck={toggleCheck} />}
+                            {activeTab === 'recipes' && 
+                                <RecipesView 
+                                    recipes={recipes} 
+                                    deleteRecipe={deleteRecipe} 
+                                    onAddRecipe={handleAddRecipe} 
+                                    onEditRecipe={handleEditRecipe}
+                                    onImportRecipes={handleImportRecipes}
+                                />
+                            }
+                        </main>
+                    </div>
+                    
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingRecipe ? "Modifica Ricetta" : "Nuova Ricetta"}>
+                        <RecipeForm 
+                            onSave={saveRecipeFromForm} 
+                            initialData={editingRecipe}
+                        />
+                    </Modal>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
