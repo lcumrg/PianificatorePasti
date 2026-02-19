@@ -21,3 +21,5 @@ Applicazione web per la pianificazione settimanale dei pasti, con gestione ricet
 ## Deploy
 
 Il sito è pubblicato su [Netlify](https://pianificatorepasti.netlify.app) con deploy automatico da GitHub.
+
+Ogni push su `main` triggera automaticamente un nuovo deploy.
