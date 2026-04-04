@@ -8,7 +8,7 @@ const DIET_GUIDELINES = {
     '4': "200g salmone / 250g pesce + 200g verdure + 40g riso / 60g pane"
 };
 
-const buildSystemPrompt = (familyPrefs) => {
+const buildSystemPrompt = (familyPrefs, cookingMethods) => {
     let prompt = `Sei un nutrizionista italiano esperto di cucina mediterranea, specializzato in pianificazione pasti per famiglie.
 Il tuo obiettivo è creare ricette PRATICHE, VELOCI e BILANCIATE che si adattino alla vita reale di una famiglia impegnata.
 
@@ -21,11 +21,33 @@ UNITÀ: "g", "ml", "pz", "qb"`;
     if (familyPrefs) {
         prompt += `\n\nPROFILO FAMIGLIA:`;
         if (familyPrefs.familySize) prompt += `\n- Componenti: ${familyPrefs.familySize} persone`;
-        if (familyPrefs.restrictions) prompt += `\n- Restrizioni/allergie: ${familyPrefs.restrictions}`;
-        if (familyPrefs.kidsPrefs) prompt += `\n- Preferenze bambini: ${familyPrefs.kidsPrefs}`;
         if (familyPrefs.maxPrepTime) prompt += `\n- Tempo preparazione preferito: max ${familyPrefs.maxPrepTime} minuti`;
         if (familyPrefs.cuisinePrefs) prompt += `\n- Preferenze cucina: ${familyPrefs.cuisinePrefs}`;
         if (familyPrefs.notes) prompt += `\n- Note: ${familyPrefs.notes}`;
+
+        // Retrocompatibilita' con vecchi campi
+        if (familyPrefs.restrictions) prompt += `\n- Restrizioni/allergie: ${familyPrefs.restrictions}`;
+        if (familyPrefs.kidsPrefs) prompt += `\n- Preferenze bambini: ${familyPrefs.kidsPrefs}`;
+
+        // Profili individuali dei membri
+        if (familyPrefs.members && familyPrefs.members.length > 0) {
+            prompt += `\n\nMEMBRI FAMIGLIA (le ricette DEVONO rispettare le esigenze di TUTTI):`;
+            familyPrefs.members.forEach(m => {
+                const name = m.name || 'Membro';
+                prompt += `\n- ${name}:`;
+                if (m.diet) {
+                    const dietLabel = m.diet === 'personalizzata' ? (m.customDiet || 'personalizzata') : m.diet;
+                    prompt += ` dieta ${dietLabel};`;
+                }
+                if (m.allergies) prompt += ` allergie/intolleranze: ${m.allergies};`;
+                if (m.dislikes) prompt += ` non mangia: ${m.dislikes};`;
+                if (m.notes) prompt += ` note: ${m.notes};`;
+            });
+        }
+    }
+
+    if (cookingMethods && cookingMethods.length > 0) {
+        prompt += `\n\nMETODI DI COTTURA PREFERITI: ${cookingMethods.join(', ')}. Usa principalmente questi metodi di cottura.`;
     }
 
     prompt += `
@@ -85,8 +107,8 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Body JSON non valido' }) };
     }
 
-    const { mode, ingredients, planSlots, existingRecipeNames, familyPrefs, context } = body;
-    const systemPrompt = buildSystemPrompt(familyPrefs);
+    const { mode, ingredients, planSlots, existingRecipeNames, familyPrefs, cookingMethods, context } = body;
+    const systemPrompt = buildSystemPrompt(familyPrefs, cookingMethods);
 
     let userPrompt;
     const contextNote = context ? `\nContesto di oggi: ${context}` : '';

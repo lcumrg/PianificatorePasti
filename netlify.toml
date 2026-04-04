@@ -1,5 +1,5 @@
 [build]
-  command = "mkdir -p dist && cp index.html manifest.json sw.js dist/"
+  command = "npm install && npx tailwindcss -i ./src/input.css -o ./dist/styles.css --minify && mkdir -p dist && cp index.html manifest.json sw.js dist/"
   publish = "dist"
   functions = "netlify/functions"
 
