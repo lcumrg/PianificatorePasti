@@ -430,20 +430,18 @@
         };
 
         // --- COMPONENTE AI RECIPE GENERATOR ---
-        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, mealTypes, familyPrefs, onSavePrefs }) => {
+        const COOKING_METHODS = ['Padella', 'Forno', 'Bollitura', 'Griglia', 'Frittura', 'Vapore', 'Pentola a pressione', 'Crudo/Insalata', 'Slow cooker'];
+
+        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, mealTypes, familyPrefs, onSavePrefs, onOpenSettings }) => {
             const [activeMode, setActiveMode] = useState(initialMode || 'from_ingredients');
-            const [showPrefs, setShowPrefs] = useState(false);
             const [ingredientsText, setIngredientsText] = useState('');
             const [recipeType, setRecipeType] = useState('');
             const [maxTime, setMaxTime] = useState('');
             const [contextText, setContextText] = useState('');
+            const [selectedMethods, setSelectedMethods] = useState([]);
             const [generatedRecipes, setGeneratedRecipes] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
-
-            // Preferenze famiglia locali (editabili nel form)
-            const [localPrefs, setLocalPrefs] = useState(familyPrefs || {});
-            useEffect(() => { setLocalPrefs(familyPrefs || {}); }, [familyPrefs]);
 
             useEffect(() => { if (initialMode) setActiveMode(initialMode); }, [initialMode]);
             useEffect(() => { if (!isOpen) { setGeneratedRecipes([]); setError(null); setLoading(false); } }, [isOpen]);
@@ -454,9 +452,8 @@
                     .filter(s => !s.myRecipe && s.type !== 'LIBERO' && s.type !== 'F (Famiglia)');
             }, [plan]);
 
-            const handleSavePrefs = () => {
-                onSavePrefs(localPrefs);
-                setShowPrefs(false);
+            const toggleMethod = (method) => {
+                setSelectedMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
             };
 
             const handleGenerate = async () => {
@@ -465,7 +462,8 @@
                 setGeneratedRecipes([]);
 
                 const baseBody = {
-                    familyPrefs: localPrefs,
+                    familyPrefs: familyPrefs || {},
+                    cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
                     context: contextText || undefined,
                 };
 
@@ -508,54 +506,30 @@
             if (!isOpen) return null;
 
             const typeLabels = { '1': 'Pasta/Riso', '2': 'Carne', '3': 'Legumi', '4': 'Pesce', 'F': 'Famiglia' };
-            const hasPrefs = localPrefs.familySize || localPrefs.restrictions || localPrefs.kidsPrefs;
+            const hasMembers = familyPrefs && familyPrefs.members && familyPrefs.members.length > 0;
 
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Genera Ricette con AI">
                     <div className="space-y-4">
-                        {/* Profilo famiglia collapsible */}
-                        <div className="border border-violet-200 rounded-lg overflow-hidden">
-                            <button onClick={() => setShowPrefs(!showPrefs)} className="w-full flex justify-between items-center px-3 py-2 bg-violet-50 text-sm font-bold text-violet-800 hover:bg-violet-100">
-                                <span>Profilo Famiglia {hasPrefs ? '(configurato)' : '(configura per risultati migliori)'}</span>
-                                <span className="text-xs">{showPrefs ? '▲' : '▼'}</span>
-                            </button>
-                            {showPrefs && (
-                                <div className="p-3 space-y-2 bg-white">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Componenti famiglia</label>
-                                            <input type="number" min="1" max="12" className="w-full border rounded p-1.5 text-sm" placeholder="Es: 4" value={localPrefs.familySize || ''} onChange={(e) => setLocalPrefs({...localPrefs, familySize: e.target.value})} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo cottura max</label>
-                                            <select className="w-full border rounded p-1.5 text-sm" value={localPrefs.maxPrepTime || ''} onChange={(e) => setLocalPrefs({...localPrefs, maxPrepTime: e.target.value})}>
-                                                <option value="">Qualsiasi</option>
-                                                <option value="15">15 min (super veloce)</option>
-                                                <option value="30">30 min (veloce)</option>
-                                                <option value="45">45 min (medio)</option>
-                                                <option value="60">1 ora+</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Allergie / Restrizioni</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: no glutine, no lattosio..." value={localPrefs.restrictions || ''} onChange={(e) => setLocalPrefs({...localPrefs, restrictions: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">I bambini non mangiano / preferenze kids</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: niente funghi, solo pasta in bianco..." value={localPrefs.kidsPrefs || ''} onChange={(e) => setLocalPrefs({...localPrefs, kidsPrefs: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Stile cucina preferito</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: mediterranea, semplice, pochi ingredienti..." value={localPrefs.cuisinePrefs || ''} onChange={(e) => setLocalPrefs({...localPrefs, cuisinePrefs: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Note generali</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: cucino batch la domenica, no forno..." value={localPrefs.notes || ''} onChange={(e) => setLocalPrefs({...localPrefs, notes: e.target.value})} />
-                                    </div>
-                                    <button onClick={handleSavePrefs} className="w-full bg-violet-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-violet-700">Salva Profilo</button>
-                                </div>
-                            )}
+                        {/* Info profilo famiglia + link impostazioni */}
+                        <div className="flex justify-between items-center px-3 py-2 bg-violet-50 rounded-lg border border-violet-200">
+                            <span className="text-sm font-bold text-violet-800">
+                                {hasMembers ? `Profilo famiglia: ${familyPrefs.members.map(m => m.name || '?').join(', ')}` : 'Profilo famiglia non configurato'}
+                            </span>
+                            <button onClick={() => { onClose(); onOpenSettings(); }} className="text-xs text-violet-600 underline hover:text-violet-800 font-medium whitespace-nowrap">Modifica</button>
+                        </div>
+
+                        {/* Metodi di cottura preferiti */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1.5">Metodi di cottura preferiti (opzionale)</label>
+                            <div className="flex flex-wrap gap-1.5">
+                                {COOKING_METHODS.map(method => (
+                                    <button key={method} onClick={() => toggleMethod(method)}
+                                        className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-all ${selectedMethods.includes(method) ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>
+                                        {method}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Tab switcher */}
@@ -928,9 +902,159 @@
         };
 
         // --- APP PRINCIPALE ---
+
+        // --- SEZIONE IMPOSTAZIONI ---
+        const DIET_OPTIONS = [
+            { value: '', label: 'Nessuna dieta specifica' },
+            { value: 'vegetariana', label: 'Vegetariana' },
+            { value: 'vegana', label: 'Vegana' },
+            { value: 'chetogenica', label: 'Chetogenica' },
+            { value: 'senza_glutine', label: 'Senza glutine' },
+            { value: 'senza_lattosio', label: 'Senza lattosio' },
+            { value: 'mediterranea', label: 'Mediterranea' },
+            { value: 'personalizzata', label: 'Personalizzata...' }
+        ];
+
+        const SettingsView = ({ familyPrefs, onSavePrefs, resetData }) => {
+            const [localPrefs, setLocalPrefs] = useState(familyPrefs || {});
+            const [saved, setSaved] = useState(false);
+            useEffect(() => { setLocalPrefs(familyPrefs || {}); }, [familyPrefs]);
+
+            const members = localPrefs.members || [];
+
+            const updatePref = (key, value) => {
+                setLocalPrefs(prev => ({ ...prev, [key]: value }));
+                setSaved(false);
+            };
+
+            const addMember = () => {
+                const newMember = { id: 'm' + Date.now(), name: '', diet: '', customDiet: '', allergies: '', dislikes: '', notes: '' };
+                updatePref('members', [...members, newMember]);
+            };
+
+            const updateMember = (id, key, value) => {
+                updatePref('members', members.map(m => m.id === id ? { ...m, [key]: value } : m));
+            };
+
+            const removeMember = (id) => {
+                if (confirm('Rimuovere questo membro?')) {
+                    updatePref('members', members.filter(m => m.id !== id));
+                }
+            };
+
+            const handleSave = () => {
+                const prefs = { ...localPrefs, familySize: String(members.length || localPrefs.familySize || '') };
+                onSavePrefs(prefs);
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2000);
+            };
+
+            return (
+                <div className="space-y-6 pb-20">
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-1">Impostazioni Famiglia</h3>
+                        <p className="text-xs text-slate-500 mb-4">Configura i profili della tua famiglia. Queste informazioni vengono usate dall'AI per generare ricette adatte a tutti.</p>
+
+                        {/* Preferenze generali */}
+                        <div className="space-y-3 mb-6">
+                            <h4 className="text-sm font-bold text-slate-700 border-b pb-1">Preferenze generali</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo cottura max</label>
+                                    <select className="w-full border rounded p-1.5 text-sm" value={localPrefs.maxPrepTime || ''} onChange={(e) => updatePref('maxPrepTime', e.target.value)}>
+                                        <option value="">Qualsiasi</option>
+                                        <option value="15">15 min (super veloce)</option>
+                                        <option value="30">30 min (veloce)</option>
+                                        <option value="45">45 min (medio)</option>
+                                        <option value="60">1 ora+</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-0.5">Stile cucina</label>
+                                    <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: mediterranea, semplice..." value={localPrefs.cuisinePrefs || ''} onChange={(e) => updatePref('cuisinePrefs', e.target.value)} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-0.5">Note generali</label>
+                                <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: cucino batch la domenica, no forno..." value={localPrefs.notes || ''} onChange={(e) => updatePref('notes', e.target.value)} />
+                            </div>
+                        </div>
+
+                        {/* Membri famiglia */}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center border-b pb-1">
+                                <h4 className="text-sm font-bold text-slate-700">Membri famiglia ({members.length})</h4>
+                                <button onClick={addMember} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-lg hover:bg-slate-700 font-bold">+ Aggiungi</button>
+                            </div>
+
+                            {members.length === 0 && (
+                                <div className="text-center py-6 text-slate-400">
+                                    <p className="text-sm">Nessun membro configurato</p>
+                                    <p className="text-xs mt-1">Aggiungi i membri della tua famiglia per personalizzare le ricette AI</p>
+                                </div>
+                            )}
+
+                            {members.map((member, idx) => (
+                                <div key={member.id} className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-slate-500">Membro {idx + 1}</span>
+                                        <button onClick={() => removeMember(member.id)} className="text-xs text-red-500 hover:text-red-700">Rimuovi</button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Nome</label>
+                                            <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: Mamma, Marco..." value={member.name} onChange={(e) => updateMember(member.id, 'name', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Dieta</label>
+                                            <select className="w-full border rounded p-1.5 text-sm bg-white" value={member.diet} onChange={(e) => updateMember(member.id, 'diet', e.target.value)}>
+                                                {DIET_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    {member.diet === 'personalizzata' && (
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Descrivi la dieta</label>
+                                            <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: low carb, pochi zuccheri..." value={member.customDiet || ''} onChange={(e) => updateMember(member.id, 'customDiet', e.target.value)} />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Allergie / Intolleranze</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: lattosio, glutine, nichel..." value={member.allergies} onChange={(e) => updateMember(member.id, 'allergies', e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Cibi che non piace</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: funghi, olive, peperoni..." value={member.dislikes} onChange={(e) => updateMember(member.id, 'dislikes', e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Note</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: mangia solo pasta in bianco..." value={member.notes} onChange={(e) => updateMember(member.id, 'notes', e.target.value)} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Salva */}
+                        <button onClick={handleSave} className={`w-full mt-4 text-white text-sm font-bold py-2.5 rounded-lg transition-all ${saved ? 'bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'}`}>
+                            {saved ? 'Salvato!' : 'Salva preferenze'}
+                        </button>
+                    </Card>
+
+                    {/* Dati */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-3">Gestione dati</h3>
+                        <button onClick={resetData} className="text-sm text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 font-medium">
+                            Reset database predefinito
+                        </button>
+                        <p className="text-xs text-slate-400 mt-2">Cancella tutte le modifiche e ripristina ricette e piani di default.</p>
+                    </Card>
+                </div>
+            );
+        };
+
         // --- SEZIONE SVILUPPO ---
         const SviluppoView = () => {
-            const APP_VERSION = "2.0.0";
+            const APP_VERSION = "2.1.0";
             const LAST_UPDATE = "Aprile 2026";
 
             const features = [
@@ -946,6 +1070,8 @@
                 { status: 'done', label: 'Note per pasto', desc: 'Campo note libero per ogni slot del piano' },
                 { status: 'done', label: 'PWA installabile', desc: 'Service worker per cache, installabile su mobile come app nativa' },
                 { status: 'done', label: 'Accessibilita base', desc: 'ARIA labels, navigazione semantica, focus trap modal, reduced motion' },
+                { status: 'done', label: 'Configuratore famiglia personalizzabile', desc: 'Profili per-persona con diete, allergie, intolleranze e preferenze individuali' },
+                { status: 'done', label: 'Metodi di cottura preferiti', desc: 'Selezione metodi cottura nel generatore AI per ricette piu\' mirate' },
             ];
 
             const roadmap = [
@@ -1468,9 +1594,7 @@
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={resetData} className="p-2 hover:bg-slate-100 rounded-full text-slate-600" title="Reset Impostazioni"><Icons.Settings /></button>
-                                </div>
+                                <button onClick={() => setActiveTab('settings')} className="p-2 hover:bg-slate-100 rounded-full text-slate-600" title="Impostazioni"><Icons.Settings /></button>
                             </div>
                             
                             {/* NAVIGATION */}
@@ -1514,6 +1638,7 @@
                                 />
                             }
                             {activeTab === 'dev' && <SviluppoView />}
+                            {activeTab === 'settings' && <SettingsView familyPrefs={familyPrefs} onSavePrefs={saveFamilyPrefs} resetData={resetData} />}
                         </main>
                     </div>
                     
@@ -1534,6 +1659,7 @@
                         mealTypes={MEAL_TYPES}
                         familyPrefs={familyPrefs}
                         onSavePrefs={saveFamilyPrefs}
+                        onOpenSettings={() => setActiveTab('settings')}
                     />
                 </div>
             );
