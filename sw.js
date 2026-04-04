@@ -1,15 +1,15 @@
-const CACHE_NAME = 'pianificatore-pasti-v1';
+const CACHE_NAME = 'pianificatore-pasti-v2';
 const STATIC_ASSETS = [
   '/',
-  '/index.html'
+  '/index.html',
+  '/styles.css'
 ];
 
 // CDN assets da cachare
 const CDN_ASSETS = [
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js',
-  'https://cdn.tailwindcss.com'
+  'https://unpkg.com/@babel/standalone/babel.min.js'
 ];
 
 // Install: cache risorse statiche
@@ -34,6 +34,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: network-first per API/Firestore, cache-first per assets statici
 self.addEventListener('fetch', (event) => {
+  // Ignora richieste non-HTTP (es. chrome-extension://)
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // Non cachare richieste Firestore o API

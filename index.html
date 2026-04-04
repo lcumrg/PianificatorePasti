@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1e293b">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
     <title>Pianificatore Pasti</title>
     
     <!-- React & ReactDOM -->
@@ -15,7 +16,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/styles.css">
     
     <!-- FIREBASE -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -1036,6 +1037,7 @@
         function App() {
             const [activeTab, setActiveTab] = useState('plan');
             const [syncStatus, setSyncStatus] = useState('loading');
+            const [syncError, setSyncError] = useState(null);
             const [lastSaveTime, setLastSaveTime] = useState(null);
 
             const [recipes, setRecipes] = useState(DEFAULT_RECIPES);
@@ -1162,7 +1164,13 @@
                             const initialPlans = { [currentWeekKey]: DEFAULT_PLAN };
                             saveToCloudImmediate({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {} });
                         }
-                    }, (error) => { console.error("Errore Sync:", error); setSyncStatus('error'); });
+                    }, (error) => {
+                        console.error("Errore Sync:", error);
+                        setSyncStatus('error');
+                        if (error.code === 'permission-denied') {
+                            setSyncError('Permessi Firebase insufficienti. Aggiorna le regole di sicurezza nella console Firebase.');
+                        }
+                    });
                 return () => unsubscribe();
             }, []);
 
@@ -1456,7 +1464,7 @@
                                     <div className="flex items-center gap-2 mt-1">
                                         <div className={`w-2 h-2 rounded-full ${syncStatus === 'saved' ? 'bg-emerald-500' : syncStatus === 'error' ? 'bg-red-500' : syncStatus === 'pending' ? 'bg-amber-400' : 'bg-blue-500 animate-pulse'}`}></div>
                                         <p className="text-xs text-slate-500 font-medium">
-                                            {syncStatus === 'saved' ? `Salvato alle ${lastSaveTime || '...'}` : syncStatus === 'pending' ? 'Modifiche in attesa...' : syncStatus === 'sync' ? 'Salvataggio...' : 'Errore Sync'}
+                                            {syncStatus === 'saved' ? `Salvato alle ${lastSaveTime || '...'}` : syncStatus === 'pending' ? 'Modifiche in attesa...' : syncStatus === 'sync' ? 'Salvataggio...' : syncError || 'Errore Sync'}
                                         </p>
                                     </div>
                                 </div>
