@@ -42,7 +42,8 @@ UNITÀ: "g", "ml", "pz", "qb"`;
                 const cats = plan.categories.map(c => `${c.label} (${c.target}x/sett)`).join(', ');
                 prompt += `\n- "${plan.name}": ${cats}`;
                 if (plan.conflicts && plan.conflicts.length > 0) {
-                    const conflictStrs = plan.conflicts.map(([a, b]) => {
+                    const conflictStrs = plan.conflicts.map(conf => {
+                        const [a, b] = conf.split(':');
                         const la = plan.categories.find(c => c.id === a)?.label || a;
                         const lb = plan.categories.find(c => c.id === b)?.label || b;
                         return `${la} + ${lb}`;

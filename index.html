@@ -108,7 +108,7 @@
                     { id: "3", label: "Legumi/Cereali", guideline: "70g cereali + 40g legumi + 200g verdure", target: 4 },
                     { id: "4", label: "Pesce", guideline: "200g pesce + 200g verdure + 40g riso / 60g pane", target: 3 }
                 ],
-                conflicts: [["2", "4"]]
+                conflicts: ["2:4"]
             },
             {
                 id: "famiglia",
@@ -282,8 +282,9 @@
                                 if (counts[t1] !== undefined) counts[t1]++;
                                 if (counts[t2] !== undefined) counts[t2]++;
 
-                                // Controlla conflitti configurati
-                                (dp.conflicts || []).forEach(([a, b]) => {
+                                // Controlla conflitti configurati (formato "a:b")
+                                (dp.conflicts || []).forEach(c => {
+                                    const [a, b] = c.split(':');
                                     if ((t1 === a && t2 === b) || (t1 === b && t2 === a)) {
                                         conflicts.push(plan[i].day);
                                     }
@@ -661,7 +662,7 @@
                                         <label className="block text-xs font-bold text-slate-600 mb-0.5">Tipo (opzionale)</label>
                                         <select className="w-full border rounded p-1.5 text-sm" value={recipeType} onChange={(e) => setRecipeType(e.target.value)}>
                                             <option value="">Qualsiasi</option>
-                                            {mealTypes.filter(t => t !== 'LIBERO').map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
+                                            {MEAL_TYPES.filter(t => t !== 'LIBERO').map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -1045,17 +1046,19 @@
                 const plan = localPlans.find(p => p.id === planId);
                 updatePlan(planId, {
                     categories: plan.categories.filter(c => c.id !== catId),
-                    conflicts: plan.conflicts.filter(([a, b]) => a !== catId && b !== catId)
+                    conflicts: plan.conflicts.filter(c => { const [a, b] = c.split(':'); return a !== catId && b !== catId; })
                 });
             };
 
             const toggleConflict = (planId, catIdA, catIdB) => {
                 const plan = localPlans.find(p => p.id === planId);
-                const exists = plan.conflicts.some(([a, b]) => (a === catIdA && b === catIdB) || (a === catIdB && b === catIdA));
+                const key1 = `${catIdA}:${catIdB}`;
+                const key2 = `${catIdB}:${catIdA}`;
+                const exists = plan.conflicts.some(c => c === key1 || c === key2);
                 if (exists) {
-                    updatePlan(planId, { conflicts: plan.conflicts.filter(([a, b]) => !((a === catIdA && b === catIdB) || (a === catIdB && b === catIdA))) });
+                    updatePlan(planId, { conflicts: plan.conflicts.filter(c => c !== key1 && c !== key2) });
                 } else {
-                    updatePlan(planId, { conflicts: [...plan.conflicts, [catIdA, catIdB]] });
+                    updatePlan(planId, { conflicts: [...plan.conflicts, key1] });
                 }
             };
 
@@ -1129,7 +1132,7 @@
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {plan.categories.map((a, i) =>
                                                         plan.categories.slice(i + 1).map(b => {
-                                                            const active = plan.conflicts.some(([x, y]) => (x === a.id && y === b.id) || (x === b.id && y === a.id));
+                                                            const active = plan.conflicts.some(c => c === `${a.id}:${b.id}` || c === `${b.id}:${a.id}`);
                                                             return (
                                                                 <button key={`${a.id}-${b.id}`} onClick={() => toggleConflict(plan.id, a.id, b.id)}
                                                                     className={`text-xs px-2 py-1 rounded-full border font-medium transition-all ${active ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-slate-500 border-slate-200 hover:border-red-200'}`}>
