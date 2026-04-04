@@ -523,34 +523,20 @@
         };
 
         // --- COMPONENTE AI RECIPE GENERATOR ---
-        const COOKING_METHODS = ['Padella', 'Forno', 'Bollitura', 'Griglia', 'Frittura', 'Vapore', 'Pentola a pressione', 'Crudo/Insalata', 'Slow cooker'];
+        const COOKING_METHODS = ['Padella', 'Forno', 'Bollitura', 'Griglia', 'Frittura', 'Friggitrice ad aria', 'Vapore', 'Pentola a pressione', 'Crudo/Insalata', 'Slow cooker'];
 
-        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, dietPlans, onOpenSettings }) => {
-            const [activeMode, setActiveMode] = useState(initialMode || 'from_ingredients');
+        const AIRecipeGenerator = ({ isOpen, onClose, recipes, onAddRecipes, dietPlans, onOpenSettings }) => {
             const [ingredientsText, setIngredientsText] = useState('');
             const [recipeType, setRecipeType] = useState('');
             const [maxTime, setMaxTime] = useState('');
             const [contextText, setContextText] = useState('');
             const [selectedMethods, setSelectedMethods] = useState([]);
+            const [selectedPlanId, setSelectedPlanId] = useState('');
             const [generatedRecipes, setGeneratedRecipes] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
 
-            useEffect(() => { if (initialMode) setActiveMode(initialMode); }, [initialMode]);
             useEffect(() => { if (!isOpen) { setGeneratedRecipes([]); setError(null); setLoading(false); } }, [isOpen]);
-
-            const emptySlots = useMemo(() => {
-                if (!plan || !dietPlans) return [];
-                const nonFreePlans = dietPlans.filter(p => !p.isFreeTrack);
-                return plan.map((slot, idx) => ({ ...slot, index: idx }))
-                    .filter(s => {
-                        // Slot is empty if any non-free track has no recipe and a type set
-                        return nonFreePlans.some(dp => {
-                            const track = s.tracks?.[dp.id];
-                            return track && track.type && track.type !== 'LIBERO' && !track.recipe;
-                        });
-                    });
-            }, [plan, dietPlans]);
 
             const toggleMethod = (method) => {
                 setSelectedMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
@@ -561,20 +547,17 @@
                 setError(null);
                 setGeneratedRecipes([]);
 
-                const baseBody = {
+                const targetPlan = selectedPlanId ? dietPlans.find(p => p.id === selectedPlanId) : null;
+                const body = {
+                    mode: 'from_ingredients',
                     dietPlans: dietPlans || [],
+                    targetPlan: targetPlan || undefined,
                     cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
                     context: contextText || undefined,
+                    ingredients: ingredientsText,
+                    recipeType: recipeType || undefined,
+                    maxTime: maxTime || undefined,
                 };
-
-                const body = activeMode === 'from_ingredients'
-                    ? { ...baseBody, mode: 'from_ingredients', ingredients: ingredientsText, recipeType: recipeType || undefined, maxTime: maxTime || undefined }
-                    : {
-                        ...baseBody,
-                        mode: 'from_plan',
-                        planSlots: emptySlots.map(s => ({ day: s.day, meal: s.meal, type: s.type.split(' ')[0] })),
-                        existingRecipeNames: recipes.map(r => r.name)
-                    };
 
                 try {
                     const resp = await fetch('/.netlify/functions/generate-recipe', {
@@ -605,18 +588,19 @@
 
             if (!isOpen) return null;
 
-            const typeLabels = { '1': 'Pasta/Riso', '2': 'Carne', '3': 'Legumi', '4': 'Pesce', 'F': 'Famiglia' };
-            const planNames = dietPlans ? dietPlans.map(p => p.name).join(', ') : '';
-
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Genera Ricette con AI">
                     <div className="space-y-4">
-                        {/* Info piani alimentari + link impostazioni */}
-                        <div className="flex justify-between items-center px-3 py-2 bg-violet-50 rounded-lg border border-violet-200">
-                            <span className="text-sm font-bold text-violet-800">
-                                Piani: {planNames || 'Non configurati'}
-                            </span>
-                            <button onClick={() => { onClose(); onOpenSettings(); }} className="text-xs text-violet-600 underline hover:text-violet-800 font-medium whitespace-nowrap">Modifica</button>
+                        {/* Selezione piano alimentare */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1">Per quale piano?</label>
+                            <div className="flex gap-2 items-center">
+                                <select className="flex-1 border rounded p-1.5 text-sm" value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
+                                    <option value="">Qualsiasi piano</option>
+                                    {(dietPlans || []).filter(p => !p.isFreeTrack).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                                <button onClick={() => { onClose(); onOpenSettings(); }} className="text-xs text-violet-600 underline hover:text-violet-800 font-medium whitespace-nowrap">Modifica piani</button>
+                            </div>
                         </div>
 
                         {/* Metodi di cottura preferiti */}
@@ -632,70 +616,37 @@
                             </div>
                         </div>
 
-                        {/* Tab switcher */}
-                        <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
-                            <button onClick={() => setActiveMode('from_ingredients')}
-                                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${activeMode === 'from_ingredients' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>
-                                Da Ingredienti
-                            </button>
-                            <button onClick={() => setActiveMode('from_plan')}
-                                className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${activeMode === 'from_plan' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>
-                                Completa Piano
-                            </button>
-                        </div>
-
-                        {/* Contenuto tab */}
-                        {activeMode === 'from_ingredients' ? (
-                            <div className="space-y-3">
+                        {/* Ingredienti */}
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-sm font-bold mb-1">Cosa hai in casa?</label>
+                                <textarea
+                                    className="w-full border rounded-lg p-3 text-sm"
+                                    rows="2"
+                                    placeholder="Es: petto di pollo, zucchine, riso, pomodorini, parmigiano..."
+                                    value={ingredientsText}
+                                    onChange={(e) => setIngredientsText(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">Cosa hai in casa?</label>
-                                    <textarea
-                                        className="w-full border rounded-lg p-3 text-sm"
-                                        rows="2"
-                                        placeholder="Es: petto di pollo, zucchine, riso, pomodorini, parmigiano..."
-                                        value={ingredientsText}
-                                        onChange={(e) => setIngredientsText(e.target.value)}
-                                    />
+                                    <label className="block text-xs font-bold text-slate-600 mb-0.5">Tipo (opzionale)</label>
+                                    <select className="w-full border rounded p-1.5 text-sm" value={recipeType} onChange={(e) => setRecipeType(e.target.value)}>
+                                        <option value="">Qualsiasi</option>
+                                        {MEAL_TYPES.filter(t => t !== 'LIBERO').map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
+                                    </select>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Tipo (opzionale)</label>
-                                        <select className="w-full border rounded p-1.5 text-sm" value={recipeType} onChange={(e) => setRecipeType(e.target.value)}>
-                                            <option value="">Qualsiasi</option>
-                                            {MEAL_TYPES.filter(t => t !== 'LIBERO').map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo max</label>
-                                        <select className="w-full border rounded p-1.5 text-sm" value={maxTime} onChange={(e) => setMaxTime(e.target.value)}>
-                                            <option value="">Qualsiasi</option>
-                                            <option value="15">15 min</option>
-                                            <option value="30">30 min</option>
-                                            <option value="45">45 min</option>
-                                        </select>
-                                    </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo max</label>
+                                    <select className="w-full border rounded p-1.5 text-sm" value={maxTime} onChange={(e) => setMaxTime(e.target.value)}>
+                                        <option value="">Qualsiasi</option>
+                                        <option value="15">15 min</option>
+                                        <option value="30">30 min</option>
+                                        <option value="45">45 min</option>
+                                    </select>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {emptySlots.length === 0 ? (
-                                    <div className="text-center text-slate-400 py-4">Tutti gli slot del piano hanno gia una ricetta assegnata.</div>
-                                ) : (
-                                    <div>
-                                        <p className="text-sm text-slate-600 mb-2"><strong>{emptySlots.length}</strong> slot da completare:</p>
-                                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                                            {emptySlots.map((s, i) => (
-                                                <div key={i} className="flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded">
-                                                    <span className="font-bold text-slate-700">{s.day}</span>
-                                                    <span className="text-slate-400">{s.meal}</span>
-                                                    <span className="ml-auto text-xs bg-slate-200 px-2 py-0.5 rounded-full font-medium">{s.type}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        </div>
 
                         {/* Contesto / note per questa richiesta */}
                         <div>
@@ -706,7 +657,7 @@
                         {/* Bottone genera */}
                         <button
                             onClick={handleGenerate}
-                            disabled={loading || (activeMode === 'from_ingredients' && !ingredientsText.trim()) || (activeMode === 'from_plan' && emptySlots.length === 0)}
+                            disabled={loading || !ingredientsText.trim()}
                             className="w-full bg-violet-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-0.5 transition-all flex items-center justify-center gap-2"
                         >
                             {loading ? (
@@ -798,7 +749,7 @@
             );
         };
 
-        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIModal }) => {
+        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint }) => {
             const weekDates = getDatesOfWeek(currentWeek);
             return (
                 <div className="space-y-6 pb-20">
@@ -809,7 +760,6 @@
                             <button onClick={() => changeWeek(7)} className="p-2 hover:bg-slate-100 rounded-full" aria-label="Settimana successiva"><Icons.Right /></button>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => openAIModal('from_plan')} className="bg-violet-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold hover:bg-violet-700"><Icons.Sparkle /> Completa con AI</button>
                             <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Print /> Stampa</button>
                         </div>
                     </div>
@@ -951,7 +901,7 @@
                             <button onClick={() => exportRecipesCSV()} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-300 flex items-center gap-2">
                                 <Icons.Download /> <span className="hidden md:inline">Esporta</span>
                             </button>
-                            <button onClick={() => openAIModal('from_ingredients')} className="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-violet-700 flex items-center gap-1"><Icons.Sparkle /> <span className="hidden md:inline">AI</span></button>
+                            <button onClick={() => openAIModal()} className="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-violet-700 flex items-center gap-1"><Icons.Sparkle /> <span className="hidden md:inline">AI</span></button>
                             <button onClick={onAddRecipe} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-emerald-700">+ Nuova</button>
                         </div>
                     </div>
@@ -1293,7 +1243,7 @@
 
             // --- AI GENERATOR ---
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
-            const [aiMode, setAiMode] = useState('from_ingredients');
+            const openAIModal = () => setIsAIModalOpen(true);
 
             // Aggiorna variabili globali derivate quando dietPlans cambia
             useEffect(() => {
@@ -1301,7 +1251,6 @@
                 DIET_GUIDELINES = getDietGuidelines(dietPlans);
             }, [dietPlans]);
 
-            const openAIModal = (mode) => { setAiMode(mode); setIsAIModalOpen(true); };
 
             const saveDietPlans = (plans) => {
                 setDietPlans(plans);
@@ -1757,7 +1706,6 @@
                                 changeWeek={changeWeek}
                                 resetData={resetData}
                                 handlePrint={handlePrint}
-                                openAIModal={openAIModal}
                             />}
                             {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={weekChecked} toggleCheck={toggleCheck} />}
                             {activeTab === 'recipes' &&
@@ -1785,8 +1733,6 @@
                     <AIRecipeGenerator
                         isOpen={isAIModalOpen}
                         onClose={() => setIsAIModalOpen(false)}
-                        mode={aiMode}
-                        plan={plan}
                         recipes={recipes}
                         onAddRecipes={addGeneratedRecipes}
                         dietPlans={dietPlans}
