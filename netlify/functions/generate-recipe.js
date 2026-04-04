@@ -127,9 +127,13 @@ exports.handler = async (event) => {
     const timeHint = body.maxTime ? `\nTempo massimo di preparazione: ${body.maxTime} minuti` : '';
 
     let planHint = '';
-    if (targetPlan && !targetPlan.isFreeTrack && targetPlan.categories) {
-        const cats = targetPlan.categories.map(c => `tipo "${c.id}" (${c.label}): ${c.guideline}`).join('\n  - ');
-        planHint = `\nQuesta ricetta è per il piano "${targetPlan.name}". Deve rispettare una di queste categorie:\n  - ${cats}\nAssegna il tipo corretto in base agli ingredienti e alle grammature.`;
+    if (targetPlan) {
+        if (targetPlan.isFreeTrack) {
+            planHint = `\nQuesta ricetta è per il piano "${targetPlan.name}" (piano libero, senza vincoli dietetici). Usa tipo "F". Crea ricette gustose e pratiche per tutta la famiglia, senza vincoli di grammature.`;
+        } else if (targetPlan.categories) {
+            const cats = targetPlan.categories.map(c => `tipo "${c.id}" (${c.label}): ${c.guideline}`).join('\n  - ');
+            planHint = `\nQuesta ricetta è per il piano "${targetPlan.name}". Deve rispettare una di queste categorie:\n  - ${cats}\nAssegna il tipo corretto in base agli ingredienti e alle grammature.`;
+        }
     }
 
     const userPrompt = `Ho questi ingredienti disponibili: ${ingredients}

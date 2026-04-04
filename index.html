@@ -597,7 +597,7 @@
                             <div className="flex gap-2 items-center">
                                 <select className="flex-1 border rounded p-1.5 text-sm" value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
                                     <option value="">Qualsiasi piano</option>
-                                    {(dietPlans || []).filter(p => !p.isFreeTrack).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    {(dietPlans || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                                 <button onClick={() => { onClose(); onOpenSettings(); }} className="text-xs text-violet-600 underline hover:text-violet-800 font-medium whitespace-nowrap">Modifica piani</button>
                             </div>
