@@ -88,7 +88,64 @@
             Code: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
         };
 
-        const MEAL_TYPES = ["1 (Pasta/Riso)", "2 (Carne)", "3 (Legumi/Cereali)", "4 (Pesce)", "F (Famiglia)", "LIBERO"];
+        const PLAN_COLORS = {
+            blue: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', label: 'text-blue-600', dot: 'bg-blue-500' },
+            orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200', label: 'text-orange-600', dot: 'bg-orange-500' },
+            emerald: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'text-emerald-600', dot: 'bg-emerald-500' },
+            purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', label: 'text-purple-600', dot: 'bg-purple-500' },
+            rose: { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200', label: 'text-rose-600', dot: 'bg-rose-500' },
+            cyan: { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200', label: 'text-cyan-600', dot: 'bg-cyan-500' },
+        };
+
+        const DEFAULT_DIET_PLANS = [
+            {
+                id: "plan_1",
+                name: "Dieta",
+                color: "blue",
+                categories: [
+                    { id: "1", label: "Pasta/Riso", guideline: "90g pasta/orzo/riso + 60g pesce o ragu + 200g verdure", target: 2 },
+                    { id: "2", label: "Carne", guideline: "200g carne + 200g verdure + 40g riso / 60g pane", target: 4 },
+                    { id: "3", label: "Legumi/Cereali", guideline: "70g cereali + 40g legumi + 200g verdure", target: 4 },
+                    { id: "4", label: "Pesce", guideline: "200g pesce + 200g verdure + 40g riso / 60g pane", target: 3 }
+                ],
+                conflicts: [["2", "4"]]
+            },
+            {
+                id: "famiglia",
+                name: "Famiglia",
+                color: "orange",
+                categories: [],
+                conflicts: [],
+                isFreeTrack: true
+            }
+        ];
+
+        // Helper: estrai opzioni tipo per un piano
+        const getMealTypesForPlan = (plan) => {
+            if (plan.isFreeTrack) return [];
+            return [...plan.categories.map(c => ({ id: c.id, label: `${c.id} (${c.label})` })), { id: 'LIBERO', label: 'LIBERO' }];
+        };
+
+        // Migrazione: vecchio formato slot -> nuovo formato con tracks
+        const migrateSlotToTracks = (slot, plans) => {
+            if (slot.tracks) return slot; // gia' migrato
+            const typeId = slot.type ? slot.type.split(' ')[0] : '';
+            return {
+                day: slot.day,
+                meal: slot.meal,
+                note: slot.note || '',
+                tracks: {
+                    [plans[0].id]: { type: typeId, recipe: slot.myRecipe || '', portions: slot.myPortions || 1 },
+                    [plans.find(p => p.isFreeTrack)?.id || 'famiglia']: { type: '', recipe: slot.famRecipe || '', portions: slot.famPortions || 2 }
+                }
+            };
+        };
+
+        // Crea slot vuoto per il nuovo formato
+        const createEmptySlot = (day, meal, plans) => ({
+            day, meal, note: '',
+            tracks: Object.fromEntries(plans.map(p => [p.id, { type: '', recipe: '', portions: p.isFreeTrack ? 2 : 1 }]))
+        });
 
         // --- CATEGORIE INGREDIENTI PER LISTA SPESA ---
         const INGREDIENT_CATEGORIES = {
@@ -125,12 +182,37 @@
         const getIngredientCategory = (name) => INGREDIENT_CATEGORIES[name] || 'Altro';
 
         // --- LINEE GUIDA DIETA ---
-        const DIET_GUIDELINES = {
-            '2': "200g CARNE + 200g Verdure + 40g riso / 60g pane",
-            '4': "200g SALMONE / 250g PESCE + 200g Verdure + 40g riso / 60g pane",
-            '1': "90g pasta / orzo / riso + 60g pesce o ragù o pesto + 200g verdure",
-            '3': "70g orzo / riso integrale / farro /avena + 40g legumi + 200g verdure"
+        // Deriva MEAL_TYPES e DIET_GUIDELINES dai piani configurati
+        const getDietGuidelines = (plans) => {
+            const guidelines = {};
+            plans.forEach(p => {
+                if (!p.isFreeTrack) {
+                    p.categories.forEach(c => { guidelines[c.id] = c.guideline; });
+                }
+            });
+            return guidelines;
         };
+
+        const getAllMealTypes = (plans) => {
+            const seen = new Set();
+            const types = [];
+            plans.forEach(p => {
+                if (!p.isFreeTrack) {
+                    p.categories.forEach(c => {
+                        if (!seen.has(c.id)) {
+                            seen.add(c.id);
+                            types.push(`${c.id} (${c.label})`);
+                        }
+                    });
+                }
+            });
+            types.push('F (Famiglia)', 'LIBERO');
+            return types;
+        };
+
+        // Default usati da RecipeForm (aggiornati dinamicamente nella App)
+        let MEAL_TYPES = getAllMealTypes(DEFAULT_DIET_PLANS);
+        let DIET_GUIDELINES = getDietGuidelines(DEFAULT_DIET_PLANS);
 
         // --- DATABASE RICETTE (Aggiornato dal tuo CSV) ---
         const DEFAULT_RECIPES = [
@@ -158,78 +240,88 @@
         ];
 
         const DEFAULT_PLAN = [
-          { day: "Lunedì", meal: "Pranzo", type: "2 (Carne)", myRecipe: 7, myPortions: 1, famRecipe: 7, famPortions: 2, note: "" },
-          { day: "Lunedì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: 12, myPortions: 1, famRecipe: 12, famPortions: 5, note: "" },
-          { day: "Martedì", meal: "Pranzo", type: "4 (Pesce)", myRecipe: 16, myPortions: 1, famRecipe: 16, famPortions: 2, note: "" },
-          { day: "Martedì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: 12, myPortions: 1, famRecipe: 1, famPortions: 5, note: "" },
-          { day: "Mercoledì", meal: "Pranzo", type: "1 (Pasta/Riso)", myRecipe: 1, myPortions: 1, famRecipe: 1, famPortions: 2, note: "" },
-          { day: "Mercoledì", meal: "Cena", type: "4 (Pesce)", myRecipe: 17, myPortions: 1, famRecipe: 4, famPortions: 5, note: "" },
-          { day: "Giovedì", meal: "Pranzo", type: "2 (Carne)", myRecipe: 8, myPortions: 1, famRecipe: 9, famPortions: 2, note: "" },
-          { day: "Giovedì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: 12, myPortions: 1, famRecipe: 12, famPortions: 4, note: "" },
-          { day: "Venerdì", meal: "Pranzo", type: "2 (Carne)", myRecipe: 10, myPortions: 1, famRecipe: 10, famPortions: 3, note: "" },
-          { day: "Venerdì", meal: "Cena", type: "3 (Legumi/Cereali)", myRecipe: 12, myPortions: 1, famRecipe: 4, famPortions: 4, note: "" },
-          { day: "Sabato", meal: "Pranzo", type: "4 (Pesce)", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 2, note: "" },
-          { day: "Sabato", meal: "Cena", type: "LIBERO", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 4, note: "" },
-          { day: "Domenica", meal: "Pranzo", type: "LIBERO", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 2, note: "" },
-          { day: "Domenica", meal: "Cena", type: "LIBERO", myRecipe: "", myPortions: 1, famRecipe: "", famPortions: 4, note: "" },
+          { day: "Lunedì", meal: "Pranzo", note: "", tracks: { plan_1: { type: "2", recipe: 7, portions: 1 }, famiglia: { type: "", recipe: 7, portions: 2 } } },
+          { day: "Lunedì", meal: "Cena", note: "", tracks: { plan_1: { type: "3", recipe: 12, portions: 1 }, famiglia: { type: "", recipe: 12, portions: 5 } } },
+          { day: "Martedì", meal: "Pranzo", note: "", tracks: { plan_1: { type: "4", recipe: 16, portions: 1 }, famiglia: { type: "", recipe: 16, portions: 2 } } },
+          { day: "Martedì", meal: "Cena", note: "", tracks: { plan_1: { type: "3", recipe: 12, portions: 1 }, famiglia: { type: "", recipe: 1, portions: 5 } } },
+          { day: "Mercoledì", meal: "Pranzo", note: "", tracks: { plan_1: { type: "1", recipe: 1, portions: 1 }, famiglia: { type: "", recipe: 1, portions: 2 } } },
+          { day: "Mercoledì", meal: "Cena", note: "", tracks: { plan_1: { type: "4", recipe: 17, portions: 1 }, famiglia: { type: "", recipe: 4, portions: 5 } } },
+          { day: "Giovedì", meal: "Pranzo", note: "", tracks: { plan_1: { type: "2", recipe: 8, portions: 1 }, famiglia: { type: "", recipe: 9, portions: 2 } } },
+          { day: "Giovedì", meal: "Cena", note: "", tracks: { plan_1: { type: "3", recipe: 12, portions: 1 }, famiglia: { type: "", recipe: 12, portions: 4 } } },
+          { day: "Venerdì", meal: "Pranzo", note: "", tracks: { plan_1: { type: "2", recipe: 10, portions: 1 }, famiglia: { type: "", recipe: 10, portions: 3 } } },
+          { day: "Venerdì", meal: "Cena", note: "", tracks: { plan_1: { type: "3", recipe: 12, portions: 1 }, famiglia: { type: "", recipe: 4, portions: 4 } } },
+          { day: "Sabato", meal: "Pranzo", note: "", tracks: { plan_1: { type: "4", recipe: "", portions: 1 }, famiglia: { type: "", recipe: "", portions: 2 } } },
+          { day: "Sabato", meal: "Cena", note: "", tracks: { plan_1: { type: "LIBERO", recipe: "", portions: 1 }, famiglia: { type: "", recipe: "", portions: 4 } } },
+          { day: "Domenica", meal: "Pranzo", note: "", tracks: { plan_1: { type: "LIBERO", recipe: "", portions: 1 }, famiglia: { type: "", recipe: "", portions: 2 } } },
+          { day: "Domenica", meal: "Cena", note: "", tracks: { plan_1: { type: "LIBERO", recipe: "", portions: 1 }, famiglia: { type: "", recipe: "", portions: 4 } } },
         ];
 
-        // --- VALIDATORE DIETA ---
-        const DIET_TARGETS = {
-            '2': { label: 'Carne', target: 4, color: 'red' },
-            '3': { label: 'Legumi', target: 4, color: 'amber' },
-            '1': { label: 'Pasta/Riso', target: 2, color: 'blue' },
-            '4': { label: 'Pesce', target: 3, color: 'cyan' }
-        };
-
-        const DietValidator = ({ plan }) => {
-            const counts = { '1': 0, '2': 0, '3': 0, '4': 0 };
-            const conflicts = [];
-
-            for (let i = 0; i < plan.length; i += 2) {
-                const lunch = plan[i];
-                const dinner = plan[i+1];
-                const t1 = lunch.type.split(' ')[0];
-                const t2 = dinner.type.split(' ')[0];
-
-                if (counts[t1] !== undefined) counts[t1]++;
-                if (counts[t2] !== undefined) counts[t2]++;
-
-                if ((t1 === '2' && t2 === '4') || (t1 === '4' && t2 === '2')) {
-                    conflicts.push(lunch.day);
-                }
-            }
+        // --- VALIDATORE DIETA (dinamico per N piani) ---
+        const DietValidator = ({ plan, dietPlans }) => {
+            const activePlans = dietPlans.filter(p => !p.isFreeTrack && p.categories.length > 0);
+            if (activePlans.length === 0) return null;
 
             return (
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
                     <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
                         <Icons.Check /> Controllo Dieta
                     </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                        {Object.entries(DIET_TARGETS).map(([key, data]) => {
-                            const count = counts[key];
-                            const isExact = count === data.target;
-                            const isOver = count > data.target;
-                            const statusColor = isExact ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 
-                                              isOver ? 'bg-red-100 text-red-800 border-red-200' : 
-                                              'bg-slate-100 text-slate-600 border-slate-200';
+                    <div className="space-y-4">
+                        {activePlans.map(dp => {
+                            const colors = PLAN_COLORS[dp.color] || PLAN_COLORS.blue;
+                            const counts = {};
+                            dp.categories.forEach(c => { counts[c.id] = 0; });
+                            const conflicts = [];
+
+                            for (let i = 0; i < plan.length; i += 2) {
+                                const lunchTrack = plan[i]?.tracks?.[dp.id];
+                                const dinnerTrack = plan[i+1]?.tracks?.[dp.id];
+                                const t1 = lunchTrack?.type || '';
+                                const t2 = dinnerTrack?.type || '';
+
+                                if (counts[t1] !== undefined) counts[t1]++;
+                                if (counts[t2] !== undefined) counts[t2]++;
+
+                                // Controlla conflitti configurati
+                                (dp.conflicts || []).forEach(([a, b]) => {
+                                    if ((t1 === a && t2 === b) || (t1 === b && t2 === a)) {
+                                        conflicts.push(plan[i].day);
+                                    }
+                                });
+                            }
+
                             return (
-                                <div key={key} className={`border rounded-lg p-2 flex flex-col items-center ${statusColor}`}>
-                                    <span className="text-xs font-bold uppercase">{data.label}</span>
-                                    <span className="text-lg font-black">{count}/{data.target}</span>
+                                <div key={dp.id}>
+                                    <div className={`text-xs font-bold ${colors.label} mb-1.5`}>{dp.name}</div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                                        {dp.categories.map(cat => {
+                                            const count = counts[cat.id] || 0;
+                                            const isExact = count === cat.target;
+                                            const isOver = count > cat.target;
+                                            const statusColor = isExact ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                                                              isOver ? 'bg-red-100 text-red-800 border-red-200' :
+                                                              'bg-slate-100 text-slate-600 border-slate-200';
+                                            return (
+                                                <div key={cat.id} className={`border rounded-lg p-1.5 flex flex-col items-center ${statusColor}`}>
+                                                    <span className="text-xs font-bold uppercase">{cat.label}</span>
+                                                    <span className="text-lg font-black">{count}/{cat.target}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {conflicts.length > 0 && (
+                                        <div className="bg-red-50 border border-red-200 rounded-lg p-2 flex items-start gap-2 mt-1">
+                                            <div className="text-red-500 mt-0.5"><Icons.Alert /></div>
+                                            <div>
+                                                <strong className="text-red-800 text-xs block">Conflitto rilevato!</strong>
+                                                <p className="text-red-600 text-xs">{conflicts.join(', ')}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
                     </div>
-                    {conflicts.length > 0 && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3">
-                            <div className="text-red-500 mt-1"><Icons.Alert /></div>
-                            <div>
-                                <strong className="text-red-800 text-sm block">Conflitto Carne/Pesce rilevato!</strong>
-                                <p className="text-red-600 text-xs">Non puoi mangiare carne e pesce lo stesso giorno: {conflicts.join(', ')}.</p>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
@@ -432,7 +524,7 @@
         // --- COMPONENTE AI RECIPE GENERATOR ---
         const COOKING_METHODS = ['Padella', 'Forno', 'Bollitura', 'Griglia', 'Frittura', 'Vapore', 'Pentola a pressione', 'Crudo/Insalata', 'Slow cooker'];
 
-        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, mealTypes, familyPrefs, onSavePrefs, onOpenSettings }) => {
+        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, dietPlans, onOpenSettings }) => {
             const [activeMode, setActiveMode] = useState(initialMode || 'from_ingredients');
             const [ingredientsText, setIngredientsText] = useState('');
             const [recipeType, setRecipeType] = useState('');
@@ -447,10 +539,17 @@
             useEffect(() => { if (!isOpen) { setGeneratedRecipes([]); setError(null); setLoading(false); } }, [isOpen]);
 
             const emptySlots = useMemo(() => {
-                if (!plan) return [];
+                if (!plan || !dietPlans) return [];
+                const nonFreePlans = dietPlans.filter(p => !p.isFreeTrack);
                 return plan.map((slot, idx) => ({ ...slot, index: idx }))
-                    .filter(s => !s.myRecipe && s.type !== 'LIBERO' && s.type !== 'F (Famiglia)');
-            }, [plan]);
+                    .filter(s => {
+                        // Slot is empty if any non-free track has no recipe and a type set
+                        return nonFreePlans.some(dp => {
+                            const track = s.tracks?.[dp.id];
+                            return track && track.type && track.type !== 'LIBERO' && !track.recipe;
+                        });
+                    });
+            }, [plan, dietPlans]);
 
             const toggleMethod = (method) => {
                 setSelectedMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
@@ -462,7 +561,7 @@
                 setGeneratedRecipes([]);
 
                 const baseBody = {
-                    familyPrefs: familyPrefs || {},
+                    dietPlans: dietPlans || [],
                     cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
                     context: contextText || undefined,
                 };
@@ -506,15 +605,15 @@
             if (!isOpen) return null;
 
             const typeLabels = { '1': 'Pasta/Riso', '2': 'Carne', '3': 'Legumi', '4': 'Pesce', 'F': 'Famiglia' };
-            const hasMembers = familyPrefs && familyPrefs.members && familyPrefs.members.length > 0;
+            const planNames = dietPlans ? dietPlans.map(p => p.name).join(', ') : '';
 
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Genera Ricette con AI">
                     <div className="space-y-4">
-                        {/* Info profilo famiglia + link impostazioni */}
+                        {/* Info piani alimentari + link impostazioni */}
                         <div className="flex justify-between items-center px-3 py-2 bg-violet-50 rounded-lg border border-violet-200">
                             <span className="text-sm font-bold text-violet-800">
-                                {hasMembers ? `Profilo famiglia: ${familyPrefs.members.map(m => m.name || '?').join(', ')}` : 'Profilo famiglia non configurato'}
+                                Piani: {planNames || 'Non configurati'}
                             </span>
                             <button onClick={() => { onClose(); onOpenSettings(); }} className="text-xs text-violet-600 underline hover:text-violet-800 font-medium whitespace-nowrap">Modifica</button>
                         </div>
@@ -665,7 +764,40 @@
             );
         };
 
-        const PlannerView = ({ plan, updatePlan, recipes, mealTypes, currentWeek, changeWeek, resetData, handlePrint, openAIModal }) => {
+        // Helper: renderizza un singolo track (binario) per un meal slot
+        const MealTrack = ({ slotIndex, trackId, track, dietPlan, recipes, updatePlan }) => {
+            const colors = PLAN_COLORS[dietPlan.color] || PLAN_COLORS.blue;
+            const mealTypes = getMealTypesForPlan(dietPlan);
+            const allRecipes = [...recipes].sort((a, b) => a.name.localeCompare(b.name));
+
+            const filteredRecipes = dietPlan.isFreeTrack
+                ? allRecipes
+                : recipes.filter(r => r.type === track.type || track.type === 'LIBERO' || !track.type);
+
+            return (
+                <div className="grid grid-cols-[auto_1fr] gap-1.5 items-center">
+                    <div className={`text-xs font-bold ${colors.label} w-12 truncate`}>{dietPlan.name}</div>
+                    <div className="flex gap-1 items-center">
+                        {!dietPlan.isFreeTrack && (
+                            <select value={track.type || ''} onChange={(e) => updatePlan(slotIndex, trackId, 'type', e.target.value)}
+                                className="text-xs bg-white border border-slate-200 rounded px-1 py-1 outline-none font-medium w-20 flex-shrink-0">
+                                <option value="">--</option>
+                                {mealTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                            </select>
+                        )}
+                        <select value={track.recipe || ''} onChange={(e) => updatePlan(slotIndex, trackId, 'recipe', e.target.value ? Number(e.target.value) : '')}
+                            className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white min-w-0">
+                            <option value="">-- Seleziona --</option>
+                            {filteredRecipes.map(r => <option key={r.id} value={r.id}>{r.type === 'F' ? '★ ' : ''}{r.name}</option>)}
+                        </select>
+                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded flex-shrink-0"
+                            value={track.portions} onChange={(e) => updatePlan(slotIndex, trackId, 'portions', parseFloat(e.target.value) || 0)} />
+                    </div>
+                </div>
+            );
+        };
+
+        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIModal }) => {
             const weekDates = getDatesOfWeek(currentWeek);
             return (
                 <div className="space-y-6 pb-20">
@@ -678,11 +810,10 @@
                         <div className="flex gap-2">
                             <button onClick={() => openAIModal('from_plan')} className="bg-violet-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold hover:bg-violet-700"><Icons.Sparkle /> Completa con AI</button>
                             <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Print /> Stampa</button>
-                            <button onClick={resetData} className="text-xs text-red-500 underline hover:text-red-700">Reset Default</button>
                         </div>
                     </div>
 
-                    <DietValidator plan={plan} />
+                    <DietValidator plan={plan} dietPlans={dietPlans} />
 
                     <div className="grid grid-cols-1 gap-6">
                         {Array.from({ length: 7 }).map((_, i) => {
@@ -692,10 +823,6 @@
                             const lunch = plan[lunchIndex];
                             const dinner = plan[dinnerIndex];
 
-                            const myRecipesLunch = recipes.filter(r => r.type === lunch.type.split(' ')[0] || lunch.type === 'LIBERO');
-                            const myRecipesDinner = recipes.filter(r => r.type === dinner.type.split(' ')[0] || dinner.type === 'LIBERO');
-                            const familyRecipes = recipes.sort((a,b) => a.name.localeCompare(b.name));
-
                             return (
                                 <Card key={i} className="p-4 border-l-4 border-l-slate-400">
                                     <div className="flex flex-col gap-4">
@@ -703,68 +830,32 @@
                                             <span className="font-bold text-lg text-slate-800 capitalize">{dateObj.toLocaleDateString('it-IT', {weekday: 'long'})}</span>
                                             <span className="text-slate-400 ml-2 text-sm">{dateObj.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}</span>
                                         </div>
-                                        
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             {/* PRANZO */}
                                             <div className="flex flex-col gap-2">
-                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
+                                                <div className="bg-slate-50 p-2 rounded">
                                                     <span className="font-bold text-sm text-slate-600">PRANZO</span>
-                                                    <select value={lunch.type} onChange={(e) => updatePlan(lunchIndex, 'type', e.target.value)} className="text-xs bg-white border border-slate-200 rounded px-1 py-0.5 outline-none font-medium">
-                                                        {mealTypes.filter(t => t !== "F (Famiglia)").map(t => <option key={t} value={t}>{t}</option>)}
-                                                    </select>
                                                 </div>
-                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                    <div className="text-xs font-bold text-blue-600 w-8">Dieta</div>
-                                                    <div className="flex gap-1">
-                                                        <select value={lunch.myRecipe} onChange={(e) => updatePlan(lunchIndex, 'myRecipe', e.target.value ? Number(e.target.value) : '')} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
-                                                            <option value="">-- Seleziona --</option>
-                                                            {myRecipesLunch.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                                        </select>
-                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={lunch.myPortions} onChange={(e) => updatePlan(lunchIndex, 'myPortions', parseFloat(e.target.value))} />
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                    <div className="text-xs font-bold text-orange-600 w-8">Fam.</div>
-                                                    <div className="flex gap-1">
-                                                        <select value={lunch.famRecipe} onChange={(e) => updatePlan(lunchIndex, 'famRecipe', e.target.value ? Number(e.target.value) : '')} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
-                                                            <option value="">-- Seleziona --</option>
-                                                            {familyRecipes.map(r => <option key={r.id} value={r.id}>{r.type === 'F' ? '★ ' : ''}{r.name}</option>)}
-                                                        </select>
-                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={lunch.famPortions} onChange={(e) => updatePlan(lunchIndex, 'famPortions', parseFloat(e.target.value))} />
-                                                    </div>
-                                                </div>
-                                                <input type="text" placeholder="Note..." value={lunch.note || ''} onChange={(e) => updatePlan(lunchIndex, 'note', e.target.value)} className="w-full text-xs border border-dashed border-slate-200 rounded px-2 py-1 text-slate-400 focus:text-slate-700 focus:border-slate-400 outline-none mt-1" />
+                                                {dietPlans.map(dp => (
+                                                    <MealTrack key={dp.id} slotIndex={lunchIndex} trackId={dp.id}
+                                                        track={lunch.tracks?.[dp.id] || { type: '', recipe: '', portions: 1 }}
+                                                        dietPlan={dp} recipes={recipes} updatePlan={updatePlan} />
+                                                ))}
+                                                <input type="text" placeholder="Note..." value={lunch.note || ''} onChange={(e) => updatePlan(lunchIndex, null, 'note', e.target.value)} className="w-full text-xs border border-dashed border-slate-200 rounded px-2 py-1 text-slate-400 focus:text-slate-700 focus:border-slate-400 outline-none mt-1" />
                                             </div>
 
                                             {/* CENA */}
                                             <div className="flex flex-col gap-2">
-                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
+                                                <div className="bg-slate-50 p-2 rounded">
                                                     <span className="font-bold text-sm text-slate-600">CENA</span>
-                                                    <select value={dinner.type} onChange={(e) => updatePlan(dinnerIndex, 'type', e.target.value)} className="text-xs bg-white border border-slate-200 rounded px-1 py-0.5 outline-none font-medium">
-                                                        {mealTypes.filter(t => t !== "F (Famiglia)").map(t => <option key={t} value={t}>{t}</option>)}
-                                                    </select>
                                                 </div>
-                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                    <div className="text-xs font-bold text-blue-600 w-8">Dieta</div>
-                                                    <div className="flex gap-1">
-                                                        <select value={dinner.myRecipe} onChange={(e) => updatePlan(dinnerIndex, 'myRecipe', e.target.value ? Number(e.target.value) : '')} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
-                                                            <option value="">-- Seleziona --</option>
-                                                            {myRecipesDinner.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                                        </select>
-                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={dinner.myPortions} onChange={(e) => updatePlan(dinnerIndex, 'myPortions', parseFloat(e.target.value))} />
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                                    <div className="text-xs font-bold text-orange-600 w-8">Fam.</div>
-                                                    <div className="flex gap-1">
-                                                        <select value={dinner.famRecipe} onChange={(e) => updatePlan(dinnerIndex, 'famRecipe', e.target.value ? Number(e.target.value) : '')} className="w-full text-sm border rounded px-2 py-1 outline-none text-slate-700 bg-white">
-                                                            <option value="">-- Seleziona --</option>
-                                                            {familyRecipes.map(r => <option key={r.id} value={r.id}>{r.type === 'F' ? '★ ' : ''}{r.name}</option>)}
-                                                        </select>
-                                                        <input type="number" min="0" step="0.5" className="w-12 text-center text-sm border rounded" value={dinner.famPortions} onChange={(e) => updatePlan(dinnerIndex, 'famPortions', parseFloat(e.target.value))} />
-                                                    </div>
-                                                </div>
-                                                <input type="text" placeholder="Note..." value={dinner.note || ''} onChange={(e) => updatePlan(dinnerIndex, 'note', e.target.value)} className="w-full text-xs border border-dashed border-slate-200 rounded px-2 py-1 text-slate-400 focus:text-slate-700 focus:border-slate-400 outline-none mt-1" />
+                                                {dietPlans.map(dp => (
+                                                    <MealTrack key={dp.id} slotIndex={dinnerIndex} trackId={dp.id}
+                                                        track={dinner.tracks?.[dp.id] || { type: '', recipe: '', portions: 1 }}
+                                                        dietPlan={dp} recipes={recipes} updatePlan={updatePlan} />
+                                                ))}
+                                                <input type="text" placeholder="Note..." value={dinner.note || ''} onChange={(e) => updatePlan(dinnerIndex, null, 'note', e.target.value)} className="w-full text-xs border border-dashed border-slate-200 rounded px-2 py-1 text-slate-400 focus:text-slate-700 focus:border-slate-400 outline-none mt-1" />
                                             </div>
                                         </div>
                                     </div>
@@ -903,144 +994,163 @@
 
         // --- APP PRINCIPALE ---
 
-        // --- SEZIONE IMPOSTAZIONI ---
-        const DIET_OPTIONS = [
-            { value: '', label: 'Nessuna dieta specifica' },
-            { value: 'vegetariana', label: 'Vegetariana' },
-            { value: 'vegana', label: 'Vegana' },
-            { value: 'chetogenica', label: 'Chetogenica' },
-            { value: 'senza_glutine', label: 'Senza glutine' },
-            { value: 'senza_lattosio', label: 'Senza lattosio' },
-            { value: 'mediterranea', label: 'Mediterranea' },
-            { value: 'personalizzata', label: 'Personalizzata...' }
-        ];
-
-        const SettingsView = ({ familyPrefs, onSavePrefs, resetData }) => {
-            const [localPrefs, setLocalPrefs] = useState(familyPrefs || {});
+        // --- SEZIONE PIANI ALIMENTARI ---
+        const SettingsView = ({ dietPlans, onSavePlans, resetData }) => {
+            const [localPlans, setLocalPlans] = useState(dietPlans);
             const [saved, setSaved] = useState(false);
-            useEffect(() => { setLocalPrefs(familyPrefs || {}); }, [familyPrefs]);
+            useEffect(() => { setLocalPlans(dietPlans); }, [dietPlans]);
 
-            const members = localPrefs.members || [];
-
-            const updatePref = (key, value) => {
-                setLocalPrefs(prev => ({ ...prev, [key]: value }));
+            const updatePlan = (planId, updates) => {
+                setLocalPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updates } : p));
                 setSaved(false);
             };
 
-            const addMember = () => {
-                const newMember = { id: 'm' + Date.now(), name: '', diet: '', customDiet: '', allergies: '', dislikes: '', notes: '' };
-                updatePref('members', [...members, newMember]);
+            const addPlan = () => {
+                const newPlan = {
+                    id: 'plan_' + Date.now(),
+                    name: 'Nuovo piano',
+                    color: Object.keys(PLAN_COLORS).find(c => !localPlans.some(p => p.color === c)) || 'emerald',
+                    categories: [],
+                    conflicts: [],
+                    isFreeTrack: false
+                };
+                setLocalPlans(prev => [...prev, newPlan]);
+                setSaved(false);
             };
 
-            const updateMember = (id, key, value) => {
-                updatePref('members', members.map(m => m.id === id ? { ...m, [key]: value } : m));
+            const removePlan = (planId) => {
+                if (localPlans.length <= 1) return;
+                if (confirm('Rimuovere questo piano alimentare?')) {
+                    setLocalPlans(prev => prev.filter(p => p.id !== planId));
+                    setSaved(false);
+                }
             };
 
-            const removeMember = (id) => {
-                if (confirm('Rimuovere questo membro?')) {
-                    updatePref('members', members.filter(m => m.id !== id));
+            const addCategory = (planId) => {
+                const plan = localPlans.find(p => p.id === planId);
+                const nextId = String((plan.categories.length > 0 ? Math.max(...plan.categories.map(c => parseInt(c.id) || 0)) : 0) + 1);
+                updatePlan(planId, {
+                    categories: [...plan.categories, { id: nextId, label: '', guideline: '', target: 1 }]
+                });
+            };
+
+            const updateCategory = (planId, catId, field, value) => {
+                const plan = localPlans.find(p => p.id === planId);
+                updatePlan(planId, {
+                    categories: plan.categories.map(c => c.id === catId ? { ...c, [field]: value } : c)
+                });
+            };
+
+            const removeCategory = (planId, catId) => {
+                const plan = localPlans.find(p => p.id === planId);
+                updatePlan(planId, {
+                    categories: plan.categories.filter(c => c.id !== catId),
+                    conflicts: plan.conflicts.filter(([a, b]) => a !== catId && b !== catId)
+                });
+            };
+
+            const toggleConflict = (planId, catIdA, catIdB) => {
+                const plan = localPlans.find(p => p.id === planId);
+                const exists = plan.conflicts.some(([a, b]) => (a === catIdA && b === catIdB) || (a === catIdB && b === catIdA));
+                if (exists) {
+                    updatePlan(planId, { conflicts: plan.conflicts.filter(([a, b]) => !((a === catIdA && b === catIdB) || (a === catIdB && b === catIdA))) });
+                } else {
+                    updatePlan(planId, { conflicts: [...plan.conflicts, [catIdA, catIdB]] });
                 }
             };
 
             const handleSave = () => {
-                const prefs = { ...localPrefs, familySize: String(members.length || localPrefs.familySize || '') };
-                onSavePrefs(prefs);
+                onSavePlans(localPlans);
                 setSaved(true);
                 setTimeout(() => setSaved(false), 2000);
             };
 
             return (
-                <div className="space-y-6 pb-20">
-                    <Card className="p-4">
-                        <h3 className="font-bold text-slate-800 mb-1">Impostazioni Famiglia</h3>
-                        <p className="text-xs text-slate-500 mb-4">Configura i profili della tua famiglia. Queste informazioni vengono usate dall'AI per generare ricette adatte a tutti.</p>
+                <div className="space-y-4 pb-20">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-lg font-bold text-slate-800">Piani alimentari</h2>
+                        <button onClick={addPlan} className="text-xs bg-slate-800 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 font-bold">+ Aggiungi piano</button>
+                    </div>
+                    <p className="text-xs text-slate-500 -mt-2">Configura i piani alimentari per ogni membro della famiglia. Ogni piano ha le sue categorie di pasto, target settimanali e linee guida nutrizionali.</p>
 
-                        {/* Preferenze generali */}
-                        <div className="space-y-3 mb-6">
-                            <h4 className="text-sm font-bold text-slate-700 border-b pb-1">Preferenze generali</h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo cottura max</label>
-                                    <select className="w-full border rounded p-1.5 text-sm" value={localPrefs.maxPrepTime || ''} onChange={(e) => updatePref('maxPrepTime', e.target.value)}>
-                                        <option value="">Qualsiasi</option>
-                                        <option value="15">15 min (super veloce)</option>
-                                        <option value="30">30 min (veloce)</option>
-                                        <option value="45">45 min (medio)</option>
-                                        <option value="60">1 ora+</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 mb-0.5">Stile cucina</label>
-                                    <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: mediterranea, semplice..." value={localPrefs.cuisinePrefs || ''} onChange={(e) => updatePref('cuisinePrefs', e.target.value)} />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-0.5">Note generali</label>
-                                <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: cucino batch la domenica, no forno..." value={localPrefs.notes || ''} onChange={(e) => updatePref('notes', e.target.value)} />
-                            </div>
-                        </div>
-
-                        {/* Membri famiglia */}
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center border-b pb-1">
-                                <h4 className="text-sm font-bold text-slate-700">Membri famiglia ({members.length})</h4>
-                                <button onClick={addMember} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-lg hover:bg-slate-700 font-bold">+ Aggiungi</button>
-                            </div>
-
-                            {members.length === 0 && (
-                                <div className="text-center py-6 text-slate-400">
-                                    <p className="text-sm">Nessun membro configurato</p>
-                                    <p className="text-xs mt-1">Aggiungi i membri della tua famiglia per personalizzare le ricette AI</p>
-                                </div>
-                            )}
-
-                            {members.map((member, idx) => (
-                                <div key={member.id} className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-500">Membro {idx + 1}</span>
-                                        <button onClick={() => removeMember(member.id)} className="text-xs text-red-500 hover:text-red-700">Rimuovi</button>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Nome</label>
-                                            <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: Mamma, Marco..." value={member.name} onChange={(e) => updateMember(member.id, 'name', e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Dieta</label>
-                                            <select className="w-full border rounded p-1.5 text-sm bg-white" value={member.diet} onChange={(e) => updateMember(member.id, 'diet', e.target.value)}>
-                                                {DIET_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    {localPlans.map((plan, planIdx) => {
+                        const colors = PLAN_COLORS[plan.color] || PLAN_COLORS.blue;
+                        return (
+                            <Card key={plan.id} className={`p-4 border-l-4 ${colors.border}`}>
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex gap-2 items-center">
+                                            <input type="text" className="text-sm font-bold border rounded px-2 py-1 flex-1" value={plan.name} onChange={(e) => updatePlan(plan.id, { name: e.target.value })} />
+                                            <select className="text-xs border rounded px-1.5 py-1" value={plan.color} onChange={(e) => updatePlan(plan.id, { color: e.target.value })}>
+                                                {Object.keys(PLAN_COLORS).map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
                                         </div>
+                                        <label className="flex items-center gap-2 text-xs text-slate-600">
+                                            <input type="checkbox" checked={plan.isFreeTrack || false} onChange={(e) => updatePlan(plan.id, { isFreeTrack: e.target.checked, categories: e.target.checked ? [] : plan.categories })} />
+                                            Piano libero (senza vincoli - es. famiglia)
+                                        </label>
                                     </div>
-                                    {member.diet === 'personalizzata' && (
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Descrivi la dieta</label>
-                                            <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: low carb, pochi zuccheri..." value={member.customDiet || ''} onChange={(e) => updateMember(member.id, 'customDiet', e.target.value)} />
-                                        </div>
+                                    {localPlans.length > 1 && (
+                                        <button onClick={() => removePlan(plan.id)} className="text-xs text-red-500 hover:text-red-700 ml-2">Rimuovi</button>
                                     )}
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Allergie / Intolleranze</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: lattosio, glutine, nichel..." value={member.allergies} onChange={(e) => updateMember(member.id, 'allergies', e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Cibi che non piace</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: funghi, olive, peperoni..." value={member.dislikes} onChange={(e) => updateMember(member.id, 'dislikes', e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Note</label>
-                                        <input type="text" className="w-full border rounded p-1.5 text-sm bg-white" placeholder="Es: mangia solo pasta in bianco..." value={member.notes} onChange={(e) => updateMember(member.id, 'notes', e.target.value)} />
-                                    </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        {/* Salva */}
-                        <button onClick={handleSave} className={`w-full mt-4 text-white text-sm font-bold py-2.5 rounded-lg transition-all ${saved ? 'bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'}`}>
-                            {saved ? 'Salvato!' : 'Salva preferenze'}
-                        </button>
-                    </Card>
+                                {!plan.isFreeTrack && (
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-bold text-slate-600">Categorie pasto</span>
+                                            <button onClick={() => addCategory(plan.id)} className="text-xs text-slate-600 border border-slate-300 px-2 py-0.5 rounded hover:bg-slate-50">+ Categoria</button>
+                                        </div>
 
-                    {/* Dati */}
+                                        {plan.categories.length === 0 && (
+                                            <p className="text-xs text-slate-400 text-center py-3">Nessuna categoria. Aggiungi le categorie di pasto per questo piano.</p>
+                                        )}
+
+                                        {plan.categories.map((cat, catIdx) => (
+                                            <div key={cat.id} className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1.5">
+                                                <div className="flex gap-2 items-center">
+                                                    <span className="text-xs font-bold text-slate-400 w-6">{cat.id}</span>
+                                                    <input type="text" className="flex-1 text-sm border rounded px-2 py-1 bg-white" placeholder="Nome categoria (es: Carne)" value={cat.label} onChange={(e) => updateCategory(plan.id, cat.id, 'label', e.target.value)} />
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-slate-500">x</span>
+                                                        <input type="number" min="0" max="14" className="w-12 text-center text-sm border rounded py-1 bg-white" value={cat.target} onChange={(e) => updateCategory(plan.id, cat.id, 'target', parseInt(e.target.value) || 0)} />
+                                                        <span className="text-xs text-slate-500">/sett</span>
+                                                    </div>
+                                                    <button onClick={() => removeCategory(plan.id, cat.id)} className="text-xs text-red-400 hover:text-red-600">x</button>
+                                                </div>
+                                                <input type="text" className="w-full text-xs border rounded px-2 py-1 bg-white text-slate-600" placeholder="Linea guida (es: 200g carne + 200g verdure + 40g riso)" value={cat.guideline} onChange={(e) => updateCategory(plan.id, cat.id, 'guideline', e.target.value)} />
+                                            </div>
+                                        ))}
+
+                                        {/* Conflitti */}
+                                        {plan.categories.length >= 2 && (
+                                            <div>
+                                                <span className="text-xs font-bold text-slate-600 block mb-1">Conflitti giornalieri (non nello stesso giorno)</span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {plan.categories.map((a, i) =>
+                                                        plan.categories.slice(i + 1).map(b => {
+                                                            const active = plan.conflicts.some(([x, y]) => (x === a.id && y === b.id) || (x === b.id && y === a.id));
+                                                            return (
+                                                                <button key={`${a.id}-${b.id}`} onClick={() => toggleConflict(plan.id, a.id, b.id)}
+                                                                    className={`text-xs px-2 py-1 rounded-full border font-medium transition-all ${active ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-slate-500 border-slate-200 hover:border-red-200'}`}>
+                                                                    {a.label || a.id} + {b.label || b.id}
+                                                                </button>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </Card>
+                        );
+                    })}
+
+                    <button onClick={handleSave} className={`w-full text-white text-sm font-bold py-2.5 rounded-lg transition-all ${saved ? 'bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'}`}>
+                        {saved ? 'Salvato!' : 'Salva piani alimentari'}
+                    </button>
+
                     <Card className="p-4">
                         <h3 className="font-bold text-slate-800 mb-3">Gestione dati</h3>
                         <button onClick={resetData} className="text-sm text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 font-medium">
@@ -1054,7 +1164,7 @@
 
         // --- SEZIONE SVILUPPO ---
         const SviluppoView = () => {
-            const APP_VERSION = "2.1.0";
+            const APP_VERSION = "3.0.0";
             const LAST_UPDATE = "Aprile 2026";
 
             const features = [
@@ -1070,7 +1180,7 @@
                 { status: 'done', label: 'Note per pasto', desc: 'Campo note libero per ogni slot del piano' },
                 { status: 'done', label: 'PWA installabile', desc: 'Service worker per cache, installabile su mobile come app nativa' },
                 { status: 'done', label: 'Accessibilita base', desc: 'ARIA labels, navigazione semantica, focus trap modal, reduced motion' },
-                { status: 'done', label: 'Configuratore famiglia personalizzabile', desc: 'Profili per-persona con diete, allergie, intolleranze e preferenze individuali' },
+                { status: 'done', label: 'Piani alimentari multipli configurabili', desc: 'Ogni membro della famiglia puo\' avere il proprio piano con categorie, target e conflitti personalizzati' },
                 { status: 'done', label: 'Metodi di cottura preferiti', desc: 'Selezione metodi cottura nel generatore AI per ricette piu\' mirate' },
             ];
 
@@ -1168,6 +1278,7 @@
 
             const [recipes, setRecipes] = useState(DEFAULT_RECIPES);
             const [checkedItems, setCheckedItems] = useState({});
+            const [dietPlans, setDietPlans] = useState(DEFAULT_DIET_PLANS);
 
             const [currentWeekStart, setCurrentWeekStart] = useState(getMonday(new Date()));
             const [weeklyPlans, setWeeklyPlans] = useState({});
@@ -1180,13 +1291,18 @@
             // --- AI GENERATOR ---
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
             const [aiMode, setAiMode] = useState('from_ingredients');
-            const [familyPrefs, setFamilyPrefs] = useState({});
+
+            // Aggiorna variabili globali derivate quando dietPlans cambia
+            useEffect(() => {
+                MEAL_TYPES = getAllMealTypes(dietPlans);
+                DIET_GUIDELINES = getDietGuidelines(dietPlans);
+            }, [dietPlans]);
 
             const openAIModal = (mode) => { setAiMode(mode); setIsAIModalOpen(true); };
 
-            const saveFamilyPrefs = (prefs) => {
-                setFamilyPrefs(prefs);
-                saveToCloud({ familyPrefs: prefs });
+            const saveDietPlans = (plans) => {
+                setDietPlans(plans);
+                saveToCloud({ dietPlans: plans });
             };
 
             const addGeneratedRecipes = (newRecipes) => {
@@ -1207,7 +1323,7 @@
                 }
                 pendingDataRef.current = null;
                 setSyncStatus('sync');
-                const fullData = { recipes, checkedItems, weeklyPlans, lastUpdate: new Date().toISOString(), ...dataToUpdate };
+                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, lastUpdate: new Date().toISOString(), ...dataToUpdate };
                 db.collection('app_pasti').doc(DOC_ID).set(fullData)
                     .then(() => setTimeout(() => setSyncStatus('saved'), 500))
                     .catch((err) => { console.error(err); setSyncStatus('error'); });
@@ -1230,7 +1346,7 @@
             useEffect(() => {
                 const handleBeforeUnload = () => {
                     if (pendingDataRef.current && db) {
-                        const fullData = { recipes, checkedItems, weeklyPlans, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
+                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
                         navigator.sendBeacon && db.collection('app_pasti').doc(DOC_ID).set(fullData);
                     }
                 };
@@ -1249,9 +1365,12 @@
                             const data = doc.data();
                             const loadedRecipes = data.recipes || DEFAULT_RECIPES;
                             setRecipes(loadedRecipes);
-                            if (data.familyPrefs) setFamilyPrefs(data.familyPrefs);
+
+                            // Carica piani alimentari configurati
+                            const loadedDietPlans = data.dietPlans || DEFAULT_DIET_PLANS;
+                            setDietPlans(loadedDietPlans);
+
                             if (data.checkedItems) {
-                                // Migrazione: se il vecchio formato è { nome: bool } (flat), wrappa sotto weekKey
                                 const ci = data.checkedItems;
                                 const keys = Object.keys(ci);
                                 const isOldFormat = keys.length > 0 && typeof ci[keys[0]] === 'boolean';
@@ -1264,21 +1383,28 @@
                                 }
                             }
 
-                            // Carica piani e migra da formato nome a ID se necessario
+                            // Carica piani settimanali e migra formati vecchi
                             if (data.weeklyPlans) {
                                 let plans = data.weeklyPlans;
                                 let needsSave = false;
                                 const migratedPlans = {};
                                 Object.keys(plans).forEach(key => {
-                                    const { migrated, changed } = migratePlanToIds(plans[key], loadedRecipes);
-                                    migratedPlans[key] = migrated;
+                                    let weekPlan = plans[key];
+                                    // Migra da nome ricetta a ID
+                                    const { migrated: idMigrated, changed } = migratePlanToIds(weekPlan, loadedRecipes);
+                                    weekPlan = idMigrated;
                                     if (changed) needsSave = true;
+                                    // Migra da vecchio formato (myRecipe/famRecipe) a tracks
+                                    const trackMigrated = weekPlan.map(slot => migrateSlotToTracks(slot, loadedDietPlans));
+                                    if (trackMigrated.some((s, i) => s !== weekPlan[i])) needsSave = true;
+                                    migratedPlans[key] = trackMigrated;
                                 });
                                 setWeeklyPlans(migratedPlans);
-                                if (needsSave) saveToCloudImmediate({ weeklyPlans: migratedPlans, recipes: loadedRecipes });
+                                if (needsSave) saveToCloudImmediate({ weeklyPlans: migratedPlans, recipes: loadedRecipes, dietPlans: loadedDietPlans });
                             } else if (data.plan) {
                                 const { migrated } = migratePlanToIds(data.plan, loadedRecipes);
-                                setWeeklyPlans({ [currentWeekKey]: migrated });
+                                const trackMigrated = migrated.map(slot => migrateSlotToTracks(slot, loadedDietPlans));
+                                setWeeklyPlans({ [currentWeekKey]: trackMigrated });
                             }
 
                             if (data.lastUpdate) {
@@ -1288,7 +1414,7 @@
                             setSyncStatus('saved');
                         } else {
                             const initialPlans = { [currentWeekKey]: DEFAULT_PLAN };
-                            saveToCloudImmediate({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {} });
+                            saveToCloudImmediate({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {}, dietPlans: DEFAULT_DIET_PLANS });
                         }
                     }, (error) => {
                         console.error("Errore Sync:", error);
@@ -1310,10 +1436,20 @@
                 setCurrentWeekStart(newDate);
             };
 
-            const updatePlan = (index, field, value) => {
-                const newPlan = [...plan];
-                newPlan[index][field] = value;
-                if (field === 'type') { newPlan[index].myRecipe = ""; }
+            const updatePlan = (index, trackId, field, value) => {
+                const newPlan = plan.map((slot, i) => {
+                    if (i !== index) return slot;
+                    if (!trackId) {
+                        // Campo a livello slot (es: note)
+                        return { ...slot, [field]: value };
+                    }
+                    const tracks = { ...(slot.tracks || {}) };
+                    const track = { ...(tracks[trackId] || { type: '', recipe: '', portions: 1 }) };
+                    track[field] = value;
+                    if (field === 'type') track.recipe = '';
+                    tracks[trackId] = track;
+                    return { ...slot, tracks };
+                });
                 const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: newPlan };
                 setWeeklyPlans(newWeeklyPlans);
                 saveToCloudDebounced({ weeklyPlans: newWeeklyPlans });
@@ -1360,7 +1496,7 @@
             const resetData = () => {
                 if(confirm("ATTENZIONE: Questo cancellerà le tue modifiche attuali e ripristinerà il database predefinito. Sei sicuro?")) {
                     const initialPlans = { [currentWeekKey]: DEFAULT_PLAN };
-                    saveToCloud({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {} });
+                    saveToCloud({ recipes: DEFAULT_RECIPES, weeklyPlans: initialPlans, checkedItems: {}, dietPlans: DEFAULT_DIET_PLANS });
                     alert("Database ripristinato!");
                 }
             };
@@ -1493,6 +1629,7 @@
             const handlePrint = () => {
                 const printArea = document.getElementById('print-area');
                 const dates = getDatesOfWeek(currentWeekStart);
+                const colWidth = Math.floor(90 / dietPlans.length);
                 const printHTML = `
                     <div style="font-family: sans-serif; color: #333;">
                         <h1 style="text-align: center; margin-bottom: 20px;">Menu Settimanale: ${formatDateDisplay(currentWeekStart)}</h1>
@@ -1500,8 +1637,7 @@
                             <thead>
                                 <tr style="background: #eee;">
                                     <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 10%;">Giorno</th>
-                                    <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 45%;">Dieta</th>
-                                    <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 45%;">Famiglia</th>
+                                    ${dietPlans.map(dp => `<th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: ${colWidth}%;">${escapeHtml(dp.name)}</th>`).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1510,13 +1646,6 @@
                                     const dateStr = date.toLocaleDateString('it-IT', {weekday:'short', day:'numeric'});
                                     const rowStyle = i % 2 === 0 ? 'border-top: 2px solid #aaa;' : 'border-bottom: 1px solid #ddd;';
                                     const mealLabel = slot.meal.toUpperCase();
-                                    
-                                    const myRec = getRecipeById(slot.myRecipe, recipes);
-                                    const famRec = getRecipeById(slot.famRecipe, recipes);
-                                    const myRecName = escapeHtml(myRec ? myRec.name : (slot.myRecipe ? '[Rimossa]' : '-'));
-                                    const famRecName = escapeHtml(famRec ? famRec.name : (slot.famRecipe ? '[Rimossa]' : '-'));
-                                    const myIng = escapeHtml(getIngredientsSummary(slot.myRecipe, slot.myPortions, recipes));
-                                    const famIng = escapeHtml(getIngredientsSummary(slot.famRecipe, slot.famPortions, recipes));
 
                                     return `
                                         <tr style="${rowStyle}">
@@ -1524,16 +1653,20 @@
                                                 <strong>${i%2===0 ? escapeHtml(dateStr) : ''}</strong>
                                                 <div style="font-size: 0.8em; color: #666; margin-top: 2px;">${escapeHtml(mealLabel)}</div>
                                             </td>
-                                            <td style="padding: 5px; border-right: 1px solid #ccc; vertical-align: top;">
-                                                <div style="font-weight: bold;">${myRecName}</div>
-                                                <div style="font-size: 0.8em;">${escapeHtml(slot.type)}</div>
-                                                ${myIng ? `<div style="font-size: 0.8em; color: #555; margin-top: 2px; font-style: italic;">(${myIng})</div>` : ''}
-                                            </td>
-                                            <td style="padding: 5px; vertical-align: top;">
-                                                <div style="font-weight: bold;">${famRecName}</div>
-                                                ${famIng ? `<div style="font-size: 0.8em; color: #555; margin-top: 2px; font-style: italic;">(${famIng})</div>` : ''}
-                                                ${slot.note ? `<div style="font-size: 0.75em; color: #888; margin-top: 3px;">📝 ${escapeHtml(slot.note)}</div>` : ''}
-                                            </td>
+                                            ${dietPlans.map(dp => {
+                                                const track = slot.tracks?.[dp.id] || {};
+                                                const rec = getRecipeById(track.recipe, recipes);
+                                                const recName = escapeHtml(rec ? rec.name : (track.recipe ? '[Rimossa]' : '-'));
+                                                const ing = escapeHtml(getIngredientsSummary(track.recipe, track.portions, recipes));
+                                                const typeLabel = !dp.isFreeTrack && track.type && track.type !== 'LIBERO' ? `<div style="font-size: 0.8em;">${escapeHtml(track.type)}</div>` : '';
+                                                return `
+                                                    <td style="padding: 5px; border-right: 1px solid #ccc; vertical-align: top;">
+                                                        <div style="font-weight: bold;">${recName}</div>
+                                                        ${typeLabel}
+                                                        ${ing ? `<div style="font-size: 0.8em; color: #555; margin-top: 2px; font-style: italic;">(${ing})</div>` : ''}
+                                                    </td>
+                                                `;
+                                            }).join('')}
                                         </tr>
                                     `;
                                 }).join('')}
@@ -1548,22 +1681,17 @@
             const shoppingList = useMemo(() => {
                 const list = {};
                 plan.forEach(slot => {
-                    const myRec = getRecipeById(slot.myRecipe, recipes);
-                    if (myRec) {
-                        myRec.ingredients.forEach(ing => {
-                            const key = `${ing.name} (${ing.unit})`;
-                            if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
-                            list[key].qty += ing.qty * slot.myPortions;
-                        });
-                    }
-                    const famRec = getRecipeById(slot.famRecipe, recipes);
-                    if (famRec) {
-                        famRec.ingredients.forEach(ing => {
-                            const key = `${ing.name} (${ing.unit})`;
-                            if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
-                            list[key].qty += ing.qty * slot.famPortions;
-                        });
-                    }
+                    if (!slot.tracks) return;
+                    Object.values(slot.tracks).forEach(track => {
+                        const rec = getRecipeById(track.recipe, recipes);
+                        if (rec) {
+                            rec.ingredients.forEach(ing => {
+                                const key = `${ing.name} (${ing.unit})`;
+                                if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
+                                list[key].qty += ing.qty * (track.portions || 0);
+                            });
+                        }
+                    });
                 });
                 return Object.values(list).sort((a, b) => a.name.localeCompare(b.name));
             }, [plan, recipes]);
@@ -1594,7 +1722,6 @@
                                         </p>
                                     </div>
                                 </div>
-                                <button onClick={() => setActiveTab('settings')} className="p-2 hover:bg-slate-100 rounded-full text-slate-600" title="Impostazioni"><Icons.Settings /></button>
                             </div>
                             
                             {/* NAVIGATION */}
@@ -1608,6 +1735,9 @@
                                 <button role="tab" aria-selected={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'recipes' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.BookOpen /> Ricette
                                 </button>
+                                <button role="tab" aria-selected={activeTab === 'settings'} onClick={() => setActiveTab('settings')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'settings' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <Icons.Settings /> Famiglia
+                                </button>
                                 <button role="tab" aria-selected={activeTab === 'dev'} onClick={() => setActiveTab('dev')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'dev' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.Code /> Sviluppo
                                 </button>
@@ -1619,7 +1749,7 @@
                                 plan={plan}
                                 updatePlan={updatePlan}
                                 recipes={recipes}
-                                mealTypes={MEAL_TYPES}
+                                dietPlans={dietPlans}
                                 currentWeek={currentWeekStart}
                                 changeWeek={changeWeek}
                                 resetData={resetData}
@@ -1638,7 +1768,7 @@
                                 />
                             }
                             {activeTab === 'dev' && <SviluppoView />}
-                            {activeTab === 'settings' && <SettingsView familyPrefs={familyPrefs} onSavePrefs={saveFamilyPrefs} resetData={resetData} />}
+                            {activeTab === 'settings' && <SettingsView dietPlans={dietPlans} onSavePlans={saveDietPlans} resetData={resetData} />}
                         </main>
                     </div>
                     
@@ -1656,9 +1786,7 @@
                         plan={plan}
                         recipes={recipes}
                         onAddRecipes={addGeneratedRecipes}
-                        mealTypes={MEAL_TYPES}
-                        familyPrefs={familyPrefs}
-                        onSavePrefs={saveFamilyPrefs}
+                        dietPlans={dietPlans}
                         onOpenSettings={() => setActiveTab('settings')}
                     />
                 </div>

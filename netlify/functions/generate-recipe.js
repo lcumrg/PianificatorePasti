@@ -1,49 +1,56 @@
 // Netlify Function: Proxy per Claude API - Generazione Ricette Personalizzate
 // La ANTHROPIC_API_KEY è impostata come env var su Netlify
 
-const DIET_GUIDELINES = {
-    '1': "90g pasta/orzo/riso + 60g pesce o ragù o pesto + 200g verdure",
-    '2': "200g carne + 200g verdure + 40g riso / 60g pane",
-    '3': "70g cereali (orzo/riso integrale/farro/avena) + 40g legumi + 200g verdure",
-    '4': "200g salmone / 250g pesce + 200g verdure + 40g riso / 60g pane"
-};
+const buildSystemPrompt = (dietPlans, cookingMethods) => {
+    // Genera regole dietetiche dinamicamente dai piani configurati
+    const allCategories = [];
+    const typeLabels = {};
+    if (dietPlans && dietPlans.length > 0) {
+        dietPlans.forEach(plan => {
+            if (!plan.isFreeTrack && plan.categories) {
+                plan.categories.forEach(cat => {
+                    allCategories.push({ plan: plan.name, id: cat.id, label: cat.label, guideline: cat.guideline });
+                    typeLabels[cat.id] = cat.label;
+                });
+            }
+        });
+    }
 
-const buildSystemPrompt = (familyPrefs, cookingMethods) => {
+    const guidelinesText = allCategories.length > 0
+        ? allCategories.map(c => `- Tipo "${c.id}" (${c.label}, piano ${c.plan}): ${c.guideline}`).join('\n')
+        : `- Tipo "1" (Pasta/Riso): 90g pasta + 60g pesce/ragu + 200g verdure\n- Tipo "2" (Carne): 200g carne + 200g verdure + 40g riso / 60g pane\n- Tipo "3" (Legumi): 70g cereali + 40g legumi + 200g verdure\n- Tipo "4" (Pesce): 200g pesce + 200g verdure + 40g riso / 60g pane`;
+
+    const typesText = allCategories.length > 0
+        ? [...new Set(allCategories.map(c => `"${c.id}" (${c.label})`))].join(', ') + ', "F" (Famiglia)'
+        : '"1" (Pasta/Riso), "2" (Carne), "3" (Legumi/Cereali), "4" (Pesce), "F" (Famiglia)';
+
     let prompt = `Sei un nutrizionista italiano esperto di cucina mediterranea, specializzato in pianificazione pasti per famiglie.
 Il tuo obiettivo è creare ricette PRATICHE, VELOCI e BILANCIATE che si adattino alla vita reale di una famiglia impegnata.
 
 REGOLE DIETETICHE (grammature per porzione singola):
-${Object.entries(DIET_GUIDELINES).map(([k, v]) => `- Tipo ${k}: ${v}`).join('\n')}
+${guidelinesText}
 
-TIPI: "1" (Pasta/Riso), "2" (Carne), "3" (Legumi/Cereali), "4" (Pesce), "F" (Famiglia)
+TIPI: ${typesText}
 UNITÀ: "g", "ml", "pz", "qb"`;
 
-    if (familyPrefs) {
-        prompt += `\n\nPROFILO FAMIGLIA:`;
-        if (familyPrefs.familySize) prompt += `\n- Componenti: ${familyPrefs.familySize} persone`;
-        if (familyPrefs.maxPrepTime) prompt += `\n- Tempo preparazione preferito: max ${familyPrefs.maxPrepTime} minuti`;
-        if (familyPrefs.cuisinePrefs) prompt += `\n- Preferenze cucina: ${familyPrefs.cuisinePrefs}`;
-        if (familyPrefs.notes) prompt += `\n- Note: ${familyPrefs.notes}`;
-
-        // Retrocompatibilita' con vecchi campi
-        if (familyPrefs.restrictions) prompt += `\n- Restrizioni/allergie: ${familyPrefs.restrictions}`;
-        if (familyPrefs.kidsPrefs) prompt += `\n- Preferenze bambini: ${familyPrefs.kidsPrefs}`;
-
-        // Profili individuali dei membri
-        if (familyPrefs.members && familyPrefs.members.length > 0) {
-            prompt += `\n\nMEMBRI FAMIGLIA (le ricette DEVONO rispettare le esigenze di TUTTI):`;
-            familyPrefs.members.forEach(m => {
-                const name = m.name || 'Membro';
-                prompt += `\n- ${name}:`;
-                if (m.diet) {
-                    const dietLabel = m.diet === 'personalizzata' ? (m.customDiet || 'personalizzata') : m.diet;
-                    prompt += ` dieta ${dietLabel};`;
+    if (dietPlans && dietPlans.length > 0) {
+        prompt += `\n\nPIANI ALIMENTARI CONFIGURATI:`;
+        dietPlans.forEach(plan => {
+            if (plan.isFreeTrack) {
+                prompt += `\n- "${plan.name}": piano libero, nessun vincolo dietetico`;
+            } else {
+                const cats = plan.categories.map(c => `${c.label} (${c.target}x/sett)`).join(', ');
+                prompt += `\n- "${plan.name}": ${cats}`;
+                if (plan.conflicts && plan.conflicts.length > 0) {
+                    const conflictStrs = plan.conflicts.map(([a, b]) => {
+                        const la = plan.categories.find(c => c.id === a)?.label || a;
+                        const lb = plan.categories.find(c => c.id === b)?.label || b;
+                        return `${la} + ${lb}`;
+                    });
+                    prompt += ` | Conflitti: non ${conflictStrs.join(', ')} nello stesso giorno`;
                 }
-                if (m.allergies) prompt += ` allergie/intolleranze: ${m.allergies};`;
-                if (m.dislikes) prompt += ` non mangia: ${m.dislikes};`;
-                if (m.notes) prompt += ` note: ${m.notes};`;
-            });
-        }
+            }
+        });
     }
 
     if (cookingMethods && cookingMethods.length > 0) {
@@ -107,8 +114,8 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Body JSON non valido' }) };
     }
 
-    const { mode, ingredients, planSlots, existingRecipeNames, familyPrefs, cookingMethods, context } = body;
-    const systemPrompt = buildSystemPrompt(familyPrefs, cookingMethods);
+    const { mode, ingredients, planSlots, existingRecipeNames, dietPlans, cookingMethods, context } = body;
+    const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods);
 
     let userPrompt;
     const contextNote = context ? `\nContesto di oggi: ${context}` : '';

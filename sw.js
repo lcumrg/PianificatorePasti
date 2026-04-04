@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pianificatore-pasti-v3';
+const CACHE_NAME = 'pianificatore-pasti-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
