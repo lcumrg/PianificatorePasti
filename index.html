@@ -83,7 +83,8 @@
             Info: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>,
             Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
             FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>,
-            Sparkle: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"></path></svg>
+            Sparkle: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"></path></svg>,
+            Code: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
         };
 
         const MEAL_TYPES = ["1 (Pasta/Riso)", "2 (Carne)", "3 (Legumi/Cereali)", "4 (Pesce)", "F (Famiglia)", "LIBERO"];
@@ -428,13 +429,20 @@
         };
 
         // --- COMPONENTE AI RECIPE GENERATOR ---
-        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, mealTypes }) => {
+        const AIRecipeGenerator = ({ isOpen, onClose, mode: initialMode, plan, recipes, onAddRecipes, mealTypes, familyPrefs, onSavePrefs }) => {
             const [activeMode, setActiveMode] = useState(initialMode || 'from_ingredients');
+            const [showPrefs, setShowPrefs] = useState(false);
             const [ingredientsText, setIngredientsText] = useState('');
             const [recipeType, setRecipeType] = useState('');
+            const [maxTime, setMaxTime] = useState('');
+            const [contextText, setContextText] = useState('');
             const [generatedRecipes, setGeneratedRecipes] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
+
+            // Preferenze famiglia locali (editabili nel form)
+            const [localPrefs, setLocalPrefs] = useState(familyPrefs || {});
+            useEffect(() => { setLocalPrefs(familyPrefs || {}); }, [familyPrefs]);
 
             useEffect(() => { if (initialMode) setActiveMode(initialMode); }, [initialMode]);
             useEffect(() => { if (!isOpen) { setGeneratedRecipes([]); setError(null); setLoading(false); } }, [isOpen]);
@@ -445,14 +453,25 @@
                     .filter(s => !s.myRecipe && s.type !== 'LIBERO' && s.type !== 'F (Famiglia)');
             }, [plan]);
 
+            const handleSavePrefs = () => {
+                onSavePrefs(localPrefs);
+                setShowPrefs(false);
+            };
+
             const handleGenerate = async () => {
                 setLoading(true);
                 setError(null);
                 setGeneratedRecipes([]);
 
+                const baseBody = {
+                    familyPrefs: localPrefs,
+                    context: contextText || undefined,
+                };
+
                 const body = activeMode === 'from_ingredients'
-                    ? { mode: 'from_ingredients', ingredients: ingredientsText, recipeType: recipeType || undefined }
+                    ? { ...baseBody, mode: 'from_ingredients', ingredients: ingredientsText, recipeType: recipeType || undefined, maxTime: maxTime || undefined }
                     : {
+                        ...baseBody,
                         mode: 'from_plan',
                         planSlots: emptySlots.map(s => ({ day: s.day, meal: s.meal, type: s.type.split(' ')[0] })),
                         existingRecipeNames: recipes.map(r => r.name)
@@ -475,22 +494,69 @@
             };
 
             const addRecipe = (recipe) => {
-                onAddRecipes([recipe]);
+                const { prepTime, tip, ...recipeData } = recipe;
+                onAddRecipes([recipeData]);
                 setGeneratedRecipes(prev => prev.filter(r => r.name !== recipe.name));
             };
 
             const addAll = () => {
-                onAddRecipes(generatedRecipes);
+                onAddRecipes(generatedRecipes.map(({ prepTime, tip, ...r }) => r));
                 setGeneratedRecipes([]);
             };
 
             if (!isOpen) return null;
 
             const typeLabels = { '1': 'Pasta/Riso', '2': 'Carne', '3': 'Legumi', '4': 'Pesce', 'F': 'Famiglia' };
+            const hasPrefs = localPrefs.familySize || localPrefs.restrictions || localPrefs.kidsPrefs;
 
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title="Genera Ricette con AI">
                     <div className="space-y-4">
+                        {/* Profilo famiglia collapsible */}
+                        <div className="border border-violet-200 rounded-lg overflow-hidden">
+                            <button onClick={() => setShowPrefs(!showPrefs)} className="w-full flex justify-between items-center px-3 py-2 bg-violet-50 text-sm font-bold text-violet-800 hover:bg-violet-100">
+                                <span>Profilo Famiglia {hasPrefs ? '(configurato)' : '(configura per risultati migliori)'}</span>
+                                <span className="text-xs">{showPrefs ? '▲' : '▼'}</span>
+                            </button>
+                            {showPrefs && (
+                                <div className="p-3 space-y-2 bg-white">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Componenti famiglia</label>
+                                            <input type="number" min="1" max="12" className="w-full border rounded p-1.5 text-sm" placeholder="Es: 4" value={localPrefs.familySize || ''} onChange={(e) => setLocalPrefs({...localPrefs, familySize: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo cottura max</label>
+                                            <select className="w-full border rounded p-1.5 text-sm" value={localPrefs.maxPrepTime || ''} onChange={(e) => setLocalPrefs({...localPrefs, maxPrepTime: e.target.value})}>
+                                                <option value="">Qualsiasi</option>
+                                                <option value="15">15 min (super veloce)</option>
+                                                <option value="30">30 min (veloce)</option>
+                                                <option value="45">45 min (medio)</option>
+                                                <option value="60">1 ora+</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Allergie / Restrizioni</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: no glutine, no lattosio..." value={localPrefs.restrictions || ''} onChange={(e) => setLocalPrefs({...localPrefs, restrictions: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">I bambini non mangiano / preferenze kids</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: niente funghi, solo pasta in bianco..." value={localPrefs.kidsPrefs || ''} onChange={(e) => setLocalPrefs({...localPrefs, kidsPrefs: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Stile cucina preferito</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: mediterranea, semplice, pochi ingredienti..." value={localPrefs.cuisinePrefs || ''} onChange={(e) => setLocalPrefs({...localPrefs, cuisinePrefs: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Note generali</label>
+                                        <input type="text" className="w-full border rounded p-1.5 text-sm" placeholder="Es: cucino batch la domenica, no forno..." value={localPrefs.notes || ''} onChange={(e) => setLocalPrefs({...localPrefs, notes: e.target.value})} />
+                                    </div>
+                                    <button onClick={handleSavePrefs} className="w-full bg-violet-600 text-white text-sm font-bold py-2 rounded-lg hover:bg-violet-700">Salva Profilo</button>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Tab switcher */}
                         <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
                             <button onClick={() => setActiveMode('from_ingredients')}
@@ -507,21 +573,32 @@
                         {activeMode === 'from_ingredients' ? (
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">Ingredienti disponibili</label>
+                                    <label className="block text-sm font-bold mb-1">Cosa hai in casa?</label>
                                     <textarea
                                         className="w-full border rounded-lg p-3 text-sm"
-                                        rows="3"
-                                        placeholder="Es: pollo, zucchine, riso, pomodori..."
+                                        rows="2"
+                                        placeholder="Es: petto di pollo, zucchine, riso, pomodorini, parmigiano..."
                                         value={ingredientsText}
                                         onChange={(e) => setIngredientsText(e.target.value)}
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Tipo ricetta (opzionale)</label>
-                                    <select className="w-full border rounded-lg p-2 text-sm" value={recipeType} onChange={(e) => setRecipeType(e.target.value)}>
-                                        <option value="">Qualsiasi tipo</option>
-                                        {mealTypes.filter(t => t !== 'LIBERO').map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
-                                    </select>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Tipo (opzionale)</label>
+                                        <select className="w-full border rounded p-1.5 text-sm" value={recipeType} onChange={(e) => setRecipeType(e.target.value)}>
+                                            <option value="">Qualsiasi</option>
+                                            {mealTypes.filter(t => t !== 'LIBERO').map(t => <option key={t} value={t.split(' ')[0]}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-0.5">Tempo max</label>
+                                        <select className="w-full border rounded p-1.5 text-sm" value={maxTime} onChange={(e) => setMaxTime(e.target.value)}>
+                                            <option value="">Qualsiasi</option>
+                                            <option value="15">15 min</option>
+                                            <option value="30">30 min</option>
+                                            <option value="45">45 min</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -530,8 +607,8 @@
                                     <div className="text-center text-slate-400 py-4">Tutti gli slot del piano hanno gia una ricetta assegnata.</div>
                                 ) : (
                                     <div>
-                                        <p className="text-sm text-slate-600 mb-2">Slot vuoti da completare:</p>
-                                        <div className="space-y-1">
+                                        <p className="text-sm text-slate-600 mb-2"><strong>{emptySlots.length}</strong> slot da completare:</p>
+                                        <div className="space-y-1 max-h-32 overflow-y-auto">
                                             {emptySlots.map((s, i) => (
                                                 <div key={i} className="flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded">
                                                     <span className="font-bold text-slate-700">{s.day}</span>
@@ -544,6 +621,12 @@
                                 )}
                             </div>
                         )}
+
+                        {/* Contesto / note per questa richiesta */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-0.5">Indicazioni per questa volta (opzionale)</label>
+                            <input type="text" className="w-full border rounded p-2 text-sm" placeholder="Es: stasera ho poco tempo, preferisco qualcosa al forno, i bambini hanno amici a cena..." value={contextText} onChange={(e) => setContextText(e.target.value)} />
+                        </div>
 
                         {/* Bottone genera */}
                         <button
@@ -579,7 +662,10 @@
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
                                                 <span className="font-bold text-slate-800">{recipe.name}</span>
-                                                <span className="ml-2 text-xs bg-slate-200 px-2 py-0.5 rounded-full">{typeLabels[recipe.type] || recipe.type}</span>
+                                                <div className="flex gap-1 mt-1">
+                                                    <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full">{typeLabels[recipe.type] || recipe.type}</span>
+                                                    {recipe.prepTime && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{recipe.prepTime} min</span>}
+                                                </div>
                                             </div>
                                             <button onClick={() => addRecipe(recipe)} className="text-sm bg-emerald-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-emerald-700 shrink-0">
                                                 + Aggiungi
@@ -590,6 +676,11 @@
                                                 <span key={j}>{j > 0 ? ' · ' : ''}{ing.name} {ing.qty}{ing.unit}</span>
                                             ))}
                                         </div>
+                                        {recipe.tip && (
+                                            <div className="mt-2 text-xs bg-amber-50 text-amber-800 px-2 py-1 rounded border border-amber-200">
+                                                💡 {recipe.tip}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -836,6 +927,112 @@
         };
 
         // --- APP PRINCIPALE ---
+        // --- SEZIONE SVILUPPO ---
+        const SviluppoView = () => {
+            const APP_VERSION = "2.0.0";
+            const LAST_UPDATE = "Aprile 2026";
+
+            const features = [
+                { status: 'done', label: 'Pianificazione settimanale pranzo/cena', desc: 'Piano per 7 giorni con doppio binario dieta + famiglia' },
+                { status: 'done', label: 'Database ricette con CRUD', desc: 'Creazione, modifica, eliminazione ricette con ingredienti e grammature' },
+                { status: 'done', label: 'Lista spesa automatica', desc: 'Generazione ingredienti aggregati con checkbox per settimana' },
+                { status: 'done', label: 'Categorie lista spesa', desc: 'Raggruppamento per reparto: verdura, carne, pesce, dispensa...' },
+                { status: 'done', label: 'Validazione dietetica', desc: 'Conteggio tipi pasto settimanali con obiettivi e conflitti' },
+                { status: 'done', label: 'Generazione ricette con AI', desc: 'Claude AI con profilo famiglia personalizzato, da ingredienti o per completare il piano' },
+                { status: 'done', label: 'Sync cloud real-time', desc: 'Firebase Firestore con debounce intelligente e stato di sincronizzazione' },
+                { status: 'done', label: 'Import/Export CSV', desc: 'Backup e ripristino del database ricette' },
+                { status: 'done', label: 'Stampa menu settimanale', desc: 'Layout ottimizzato per stampa A4 con ingredienti e note' },
+                { status: 'done', label: 'Note per pasto', desc: 'Campo note libero per ogni slot del piano' },
+                { status: 'done', label: 'PWA installabile', desc: 'Service worker per cache, installabile su mobile come app nativa' },
+                { status: 'done', label: 'Accessibilita base', desc: 'ARIA labels, navigazione semantica, focus trap modal, reduced motion' },
+            ];
+
+            const roadmap = [
+                { priority: 'alta', label: 'Autenticazione Firebase', desc: 'Login per proteggere i dati della famiglia con accesso sicuro' },
+                { priority: 'alta', label: 'AI: suggerimento automatico piano completo', desc: 'Genera un intero piano settimanale rispettando vincoli dietetici e preferenze' },
+                { priority: 'media', label: 'Offline mode completo', desc: 'Coda di modifiche offline con sync automatica al ritorno della connessione' },
+                { priority: 'media', label: 'Drag & drop piano', desc: 'Riorganizzare i pasti trascinando le ricette tra gli slot' },
+                { priority: 'media', label: 'Storico settimane', desc: 'Visualizzare e confrontare piani delle settimane passate' },
+                { priority: 'media', label: 'AI: categorizzazione automatica ingredienti', desc: 'L\'AI assegna automaticamente la categoria a ingredienti nuovi' },
+                { priority: 'bassa', label: 'Notifiche push', desc: 'Promemoria per la preparazione pasti e la spesa' },
+                { priority: 'bassa', label: 'Multi-famiglia', desc: 'Supporto per piu famiglie/utenti con dati separati' },
+                { priority: 'bassa', label: 'Tema scuro', desc: 'Dark mode per uso serale' },
+            ];
+
+            const statusIcon = { done: '✅', wip: '🔧' };
+            const priorityColors = { alta: 'bg-red-100 text-red-800', media: 'bg-amber-100 text-amber-800', bassa: 'bg-slate-100 text-slate-600' };
+
+            return (
+                <div className="space-y-6 pb-20">
+                    <div className="text-center">
+                        <h2 className="text-2xl font-bold text-slate-800">Pianificatore Pasti</h2>
+                        <p className="text-slate-400 text-sm mt-1">v{APP_VERSION} · Ultimo aggiornamento: {LAST_UPDATE}</p>
+                    </div>
+
+                    {/* Descrizione progetto */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-2">Il Progetto</h3>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            Un'app pensata per famiglie che vogliono seguire un piano alimentare sano senza impazzire nell'organizzazione.
+                            L'obiettivo e rendere <strong>pratico e veloce</strong> pianificare i pasti settimanali, ottimizzare la spesa,
+                            e adattare le routine alimentari familiari con il supporto dell'intelligenza artificiale.
+                        </p>
+                        <p className="text-sm text-slate-600 leading-relaxed mt-2">
+                            Ideale per <strong>famiglie numerose</strong> dove il tempo e prezioso: doppio binario dieta personale + famiglia,
+                            lista spesa automatica per reparto, e generazione ricette AI che tiene conto delle preferenze di tutti.
+                        </p>
+                    </Card>
+
+                    {/* Tech stack */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-2">Tecnologie</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {['React 18', 'Firebase Firestore', 'Tailwind CSS', 'Claude AI (Anthropic)', 'Netlify Functions', 'PWA'].map(t => (
+                                <span key={t} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full font-medium">{t}</span>
+                            ))}
+                        </div>
+                    </Card>
+
+                    {/* Feature completate */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-3">Funzionalita ({features.length})</h3>
+                        <div className="space-y-2">
+                            {features.map((f, i) => (
+                                <div key={i} className="flex gap-2 items-start">
+                                    <span className="shrink-0 mt-0.5">{statusIcon[f.status]}</span>
+                                    <div>
+                                        <div className="text-sm font-bold text-slate-700">{f.label}</div>
+                                        <div className="text-xs text-slate-400">{f.desc}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+
+                    {/* Roadmap */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-3">Roadmap</h3>
+                        <div className="space-y-2">
+                            {roadmap.map((r, i) => (
+                                <div key={i} className="flex gap-2 items-start">
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold shrink-0 mt-0.5 ${priorityColors[r.priority]}`}>{r.priority}</span>
+                                    <div>
+                                        <div className="text-sm font-bold text-slate-700">{r.label}</div>
+                                        <div className="text-xs text-slate-400">{r.desc}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+
+                    <div className="text-center text-xs text-slate-400 space-y-1">
+                        <p>Sviluppato con Claude Code (Anthropic)</p>
+                        <p>Repo: github.com/lcumrg/PianificatorePasti</p>
+                    </div>
+                </div>
+            );
+        };
+
         function App() {
             const [activeTab, setActiveTab] = useState('plan');
             const [syncStatus, setSyncStatus] = useState('loading');
@@ -855,8 +1052,14 @@
             // --- AI GENERATOR ---
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
             const [aiMode, setAiMode] = useState('from_ingredients');
+            const [familyPrefs, setFamilyPrefs] = useState({});
 
             const openAIModal = (mode) => { setAiMode(mode); setIsAIModalOpen(true); };
+
+            const saveFamilyPrefs = (prefs) => {
+                setFamilyPrefs(prefs);
+                saveToCloud({ familyPrefs: prefs });
+            };
 
             const addGeneratedRecipes = (newRecipes) => {
                 const updated = [...recipes, ...newRecipes.map(r => ({ ...r, id: Date.now() + Math.random() }))];
@@ -918,6 +1121,7 @@
                             const data = doc.data();
                             const loadedRecipes = data.recipes || DEFAULT_RECIPES;
                             setRecipes(loadedRecipes);
+                            if (data.familyPrefs) setFamilyPrefs(data.familyPrefs);
                             if (data.checkedItems) {
                                 // Migrazione: se il vecchio formato è { nome: bool } (flat), wrappa sotto weekKey
                                 const ci = data.checkedItems;
@@ -1272,6 +1476,9 @@
                                 <button role="tab" aria-selected={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'recipes' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.BookOpen /> Ricette
                                 </button>
+                                <button role="tab" aria-selected={activeTab === 'dev'} onClick={() => setActiveTab('dev')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'dev' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <Icons.Code /> Sviluppo
+                                </button>
                             </nav>
                         </header>
                         
@@ -1298,6 +1505,7 @@
                                     openAIModal={openAIModal}
                                 />
                             }
+                            {activeTab === 'dev' && <SviluppoView />}
                         </main>
                     </div>
                     
@@ -1316,6 +1524,8 @@
                         recipes={recipes}
                         onAddRecipes={addGeneratedRecipes}
                         mealTypes={MEAL_TYPES}
+                        familyPrefs={familyPrefs}
+                        onSavePrefs={saveFamilyPrefs}
                     />
                 </div>
             );
