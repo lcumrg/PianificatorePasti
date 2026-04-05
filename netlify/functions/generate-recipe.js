@@ -138,8 +138,18 @@ exports.handler = async (event) => {
         if (dietPlans && dietPlans.length > 0) {
             tracksInfo = dietPlans.map(dp => {
                 if (dp.isFreeTrack) return `- Track "${dp.id}" ("${dp.name}"): piano libero, usa tipo "F", portions: 2`;
-                const cats = dp.categories.map(c => `${c.label}(${c.id}) ${c.target}x/sett`).join(', ');
-                return `- Track "${dp.id}" ("${dp.name}"): ${cats}, portions: 1`;
+                const totalTarget = dp.categories.reduce((sum, c) => sum + c.target, 0);
+                const liberoSlots = 14 - totalTarget;
+                const cats = dp.categories.map(c => `${c.label}(tipo "${c.id}") ESATTAMENTE ${c.target}x/settimana`).join(', ');
+                const conflictText = dp.conflicts && dp.conflicts.length > 0
+                    ? dp.conflicts.map(conf => {
+                        const [a, b] = conf.split(':');
+                        const la = dp.categories.find(c => c.id === a)?.label || a;
+                        const lb = dp.categories.find(c => c.id === b)?.label || b;
+                        return `${la}(${a}) e ${lb}(${b}) NON possono essere nello stesso giorno (pranzo+cena)`;
+                    }).join('; ')
+                    : 'nessuno';
+                return `- Track "${dp.id}" ("${dp.name}"): ${cats}. I restanti ${liberoSlots} slot DEVONO avere type "LIBERO" (pasto senza vincolo dietetico, scegli comunque una ricetta adatta). Conflitti giornalieri: ${conflictText}. portions: 1`;
             }).join('\n');
         }
 
@@ -162,10 +172,11 @@ REGOLE:
 1. Assegna una ricetta a OGNI slot (7 giorni x pranzo e cena = 14 slot)
 2. Per ogni slot, compila TUTTE le tracks elencate sopra
 3. Non ripetere la stessa ricetta più di 2 volte nella settimana
-4. Rispetta i target settimanali per categoria di ogni track
-5. Rispetta i conflitti (non assegnare tipi in conflitto nello stesso giorno)
+4. I target per categoria sono ESATTI: assegna il numero PRECISO di pasti per ogni categoria. Quando tutti i target sono raggiunti, gli slot rimanenti DEVONO avere type "LIBERO" (pasto libero senza vincolo dietetico)
+5. CONFLITTI GIORNALIERI: se due tipi sono in conflitto (indicato sopra), NON assegnarli nello stesso giorno (uno a pranzo e l'altro a cena)
 6. Usa SOLO gli ID delle ricette dal catalogo
 7. Per le track libere (isFreeTrack), assegna type "F" e scegli ricette adatte alla famiglia
+8. Per gli slot "LIBERO" delle track dieta, scegli comunque una ricetta dal catalogo (qualsiasi tipo)
 
 GIORNI: Lunedi, Martedi, Mercoledi, Giovedi, Venerdi, Sabato, Domenica
 PASTI: Pranzo, Cena
