@@ -86,7 +86,11 @@
             Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
             FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>,
             Sparkle: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"></path></svg>,
-            Code: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            Code: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>,
+            Pantry: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2h16a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"></path><line x1="3" y1="8" x2="21" y2="8"></line><line x1="3" y1="14" x2="21" y2="14"></line><line x1="8" y1="8" x2="8" y2="14"></line><line x1="16" y1="8" x2="16" y2="14"></line></svg>,
+            Camera: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>,
+            Minus: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+            Snowflake: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M20 16l-4-4 4-4"></path><path d="M4 8l4 4-4 4"></path><path d="M16 4l-4 4-4-4"></path><path d="M8 20l4-4 4 4"></path></svg>
         };
 
         const PLAN_COLORS = {
@@ -174,13 +178,21 @@
             'Zenzero': 'Dispensa',
         };
         const CATEGORY_ORDER = ['Verdura', 'Carne', 'Pesce', 'Latticini', 'Cereali e Pasta', 'Legumi', 'Dispensa', 'Altro'];
+
+        // --- CONTAINER ICONS & LABELS ---
+        const CONTAINER_INFO = {
+            dispensa: { label: 'Dispensa', emoji: '🗄️', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+            frigo: { label: 'Frigo', emoji: '🧊', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+            freezer: { label: 'Freezer', emoji: '❄️', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+        };
         const CATEGORY_COLORS = {
             'Verdura': 'bg-green-100 text-green-800', 'Carne': 'bg-red-100 text-red-800',
             'Pesce': 'bg-cyan-100 text-cyan-800', 'Latticini': 'bg-yellow-100 text-yellow-800',
             'Cereali e Pasta': 'bg-amber-100 text-amber-800', 'Legumi': 'bg-orange-100 text-orange-800',
             'Dispensa': 'bg-slate-100 text-slate-700', 'Altro': 'bg-purple-100 text-purple-800',
         };
-        const getIngredientCategory = (name) => INGREDIENT_CATEGORIES[name] || 'Altro';
+        // getIngredientCategory viene definita dentro App() come resolveCategory (usa customCategories)
+        let getIngredientCategory = (name) => INGREDIENT_CATEGORIES[name] || 'Altro';
 
         // --- LINEE GUIDA DIETA ---
         // Deriva MEAL_TYPES e DIET_GUIDELINES dai piani configurati
@@ -766,19 +778,16 @@
         const DAY_NAMES = ['Lunedi', 'Martedi', 'Mercoledi', 'Giovedi', 'Venerdi', 'Sabato', 'Domenica'];
         const DAY_ACCENTED = { 'lunedi': 'Lunedì', 'martedi': 'Martedì', 'mercoledi': 'Mercoledì', 'giovedi': 'Giovedì', 'venerdi': 'Venerdì', 'sabato': 'Sabato', 'domenica': 'Domenica' };
 
-        const AIWeeklyPlanGenerator = ({ isOpen, onClose, recipes, dietPlans, onApplyPlan, onOpenAIRecipes }) => {
+        const AIWeeklyPlanGenerator = ({ isOpen, onClose, recipes, dietPlans, onApplyPlan, pantry }) => {
             const [step, setStep] = useState(0);
-            const [fridgeText, setFridgeText] = useState('');
             const [contextText, setContextText] = useState('');
             const [selectedMethods, setSelectedMethods] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [generatedPlan, setGeneratedPlan] = useState(null);
-            const [notCovered, setNotCovered] = useState([]);
-            const [usedIngredients, setUsedIngredients] = useState([]);
 
             useEffect(() => {
-                if (!isOpen) { setStep(0); setError(null); setLoading(false); setGeneratedPlan(null); setNotCovered([]); setUsedIngredients([]); }
+                if (!isOpen) { setStep(0); setError(null); setLoading(false); setGeneratedPlan(null); }
             }, [isOpen]);
 
             const toggleMethod = (method) => {
@@ -796,7 +805,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             mode: 'weekly_plan',
-                            fridgeIngredients: fridgeText,
+                            pantry: pantry.map(p => ({ name: p.name, qty: p.qty, unit: p.unit, container: p.container })),
                             recipes: recipes.map(r => ({ id: r.id, type: r.type, name: r.name, ingredients: r.ingredients })),
                             dietPlans: dietPlans || [],
                             cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
@@ -807,10 +816,7 @@
                     if (!resp.ok) throw new Error(data.error || 'Errore nella generazione');
 
                     setGeneratedPlan(data.weeklyPlan || []);
-                    setUsedIngredients(data.fridgeIngredientsUsed || []);
-                    const nc = data.fridgeIngredientsNotCovered || [];
-                    setNotCovered(nc);
-                    setStep(nc.length > 0 ? 1.5 : 2);
+                    setStep(2);
                 } catch (err) {
                     setError(err.message);
                     setStep(0);
@@ -822,15 +828,6 @@
             const getRecipeName = (recipeId) => {
                 const r = recipes.find(r => r.id === recipeId);
                 return r ? r.name : '—';
-            };
-
-            const isRecipeUsingFridge = (recipeId) => {
-                if (usedIngredients.length === 0) return false;
-                const r = recipes.find(r => r.id === recipeId);
-                if (!r) return false;
-                return r.ingredients.some(ing =>
-                    usedIngredients.some(fi => ing.name.toLowerCase().includes(fi.toLowerCase()) || fi.toLowerCase().includes(ing.name.toLowerCase()))
-                );
             };
 
             const handleApply = () => {
@@ -865,8 +862,7 @@
                     }
                 }
 
-                const fridgeList = fridgeText.split(',').map(s => s.trim()).filter(Boolean);
-                onApplyPlan(newPlan, fridgeList);
+                onApplyPlan(newPlan);
                 onClose();
             };
 
@@ -885,16 +881,21 @@
                                     </div>
                                 )}
 
-                                <div>
-                                    <label className="block text-sm font-bold mb-1">Ingredienti in frigo da smaltire</label>
-                                    <textarea
-                                        className="w-full border rounded-lg p-3 text-sm"
-                                        rows="3"
-                                        placeholder="Es: petto di pollo, zucchine, pomodorini, mozzarella...&#10;(opzionale - le ricette dei primi giorni useranno questi ingredienti)"
-                                        value={fridgeText}
-                                        onChange={(e) => setFridgeText(e.target.value)}
-                                    />
-                                </div>
+                                {pantry.length > 0 ? (
+                                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm">
+                                        <span className="font-bold text-emerald-800">L'AI terra conto della tua dispensa ({pantry.length} prodotti)</span>
+                                        <div className="text-emerald-700 text-xs mt-1">
+                                            {['frigo', 'freezer', 'dispensa'].map(c => {
+                                                const items = pantry.filter(p => p.container === c);
+                                                return items.length > 0 ? <div key={c}><strong>{CONTAINER_INFO[c]?.emoji} {CONTAINER_INFO[c]?.label}:</strong> {items.map(p => p.name).join(', ')}</div> : null;
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm text-slate-500">
+                                        Dispensa vuota. L'AI generera il piano senza tenere conto di prodotti gia disponibili.
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-xs font-bold text-slate-600 mb-1">Metodi di cottura preferiti</label>
@@ -932,43 +933,9 @@
                             </div>
                         )}
 
-                        {/* Step 1.5: Ingredienti non coperti */}
-                        {step === 1.5 && (
-                            <>
-                                <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
-                                    <p className="font-bold text-amber-800 mb-2">Alcuni ingredienti del frigo non sono usati da nessuna ricetta:</p>
-                                    <div className="flex flex-wrap gap-1 mb-3">
-                                        {notCovered.map(ing => (
-                                            <span key={ing} className="bg-amber-200 text-amber-900 text-xs px-2 py-1 rounded-full font-bold">{ing}</span>
-                                        ))}
-                                    </div>
-                                    <p className="text-sm text-amber-700">Vuoi creare nuove ricette per smaltire questi ingredienti?</p>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <button onClick={() => { onOpenAIRecipes(notCovered.join(', ')); }}
-                                        className="flex-1 bg-violet-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-violet-700">
-                                        Crea Ricette per questi ingredienti
-                                    </button>
-                                    <button onClick={() => setStep(2)}
-                                        className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm hover:bg-slate-300">
-                                        Continua senza
-                                    </button>
-                                </div>
-                            </>
-                        )}
-
                         {/* Step 2: Anteprima */}
                         {step === 2 && generatedPlan && (
                             <>
-                                {usedIngredients.length > 0 && (
-                                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm">
-                                        <span className="font-bold text-emerald-800">Ingredienti frigo usati: </span>
-                                        <span className="text-emerald-700">{usedIngredients.join(', ')}</span>
-                                        <span className="text-emerald-600 text-xs block mt-1">Saranno esclusi dalla lista spesa</span>
-                                    </div>
-                                )}
-
                                 <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                                     {DAY_NAMES.map(day => {
                                         const dayLower = day.toLowerCase();
@@ -993,17 +960,15 @@
                                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-slate-400">P:</span>
-                                                        <span className={`${pranzoId && isRecipeUsingFridge(pranzoId) ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>
+                                                        <span className="text-slate-600">
                                                             {pranzoId ? getRecipeName(pranzoId) : '—'}
                                                         </span>
-                                                        {pranzoId && isRecipeUsingFridge(pranzoId) && <span className="text-emerald-500 text-[10px]">🧊</span>}
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-slate-400">C:</span>
-                                                        <span className={`${cenaId && isRecipeUsingFridge(cenaId) ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>
+                                                        <span className="text-slate-600">
                                                             {cenaId ? getRecipeName(cenaId) : '—'}
                                                         </span>
-                                                        {cenaId && isRecipeUsingFridge(cenaId) && <span className="text-emerald-500 text-[10px]">🧊</span>}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1028,7 +993,7 @@
             );
         };
 
-        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIWeeklyModal }) => {
+        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIWeeklyModal, onMarkDone }) => {
             const weekDates = getDatesOfWeek(currentWeek);
             return (
                 <div className="space-y-6 pb-20">
@@ -1065,8 +1030,15 @@
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             {/* PRANZO */}
                                             <div className="flex flex-col gap-2">
-                                                <div className="bg-slate-50 p-2 rounded">
+                                                <div className="bg-slate-50 p-2 rounded flex justify-between items-center">
                                                     <span className="font-bold text-sm text-slate-600">PRANZO</span>
+                                                    {lunch.tracks && Object.values(lunch.tracks).some(t => t.recipe) && (
+                                                        <button onClick={() => onMarkDone(lunch)}
+                                                            className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${lunch.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'}`}
+                                                            title="Segna come fatto e scarica dalla dispensa">
+                                                            <Icons.Check /> {lunch.done ? 'Fatto' : 'Fatto?'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 {dietPlans.map(dp => (
                                                     <MealTrack key={dp.id} slotIndex={lunchIndex} trackId={dp.id}
@@ -1078,8 +1050,15 @@
 
                                             {/* CENA */}
                                             <div className="flex flex-col gap-2">
-                                                <div className="bg-slate-50 p-2 rounded">
+                                                <div className="bg-slate-50 p-2 rounded flex justify-between items-center">
                                                     <span className="font-bold text-sm text-slate-600">CENA</span>
+                                                    {dinner.tracks && Object.values(dinner.tracks).some(t => t.recipe) && (
+                                                        <button onClick={() => onMarkDone(dinner)}
+                                                            className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${dinner.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'}`}
+                                                            title="Segna come fatto e scarica dalla dispensa">
+                                                            <Icons.Check /> {dinner.done ? 'Fatto' : 'Fatto?'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 {dietPlans.map(dp => (
                                                     <MealTrack key={dp.id} slotIndex={dinnerIndex} trackId={dp.id}
@@ -1098,7 +1077,7 @@
             );
         };
 
-        const ShoppingListView = ({ shoppingList, handleCopy, checkedItems, toggleCheck, fridgeExcluded }) => {
+        const ShoppingListView = ({ shoppingList, handleCopy, checkedItems, toggleCheck, pantryCovered }) => {
             const grouped = useMemo(() => {
                 const groups = {};
                 shoppingList.forEach(item => {
@@ -1115,12 +1094,12 @@
                         <h2 className="text-2xl font-bold text-slate-800">Lista Spesa</h2>
                         <button onClick={handleCopy} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">Copia Tutto</button>
                     </div>
-                    {fridgeExcluded && fridgeExcluded.length > 0 && (
+                    {pantryCovered && pantryCovered.length > 0 && (
                         <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm flex items-start gap-2">
-                            <span className="text-lg">🧊</span>
+                            <span className="text-lg">🗄️</span>
                             <div>
-                                <span className="font-bold text-emerald-800">Ingredienti in frigo (esclusi dalla spesa): </span>
-                                <span className="text-emerald-700">{fridgeExcluded.join(', ')}</span>
+                                <span className="font-bold text-emerald-800">Coperti dalla dispensa ({pantryCovered.length}): </span>
+                                <span className="text-emerald-700">{pantryCovered.map(i => i.name).join(', ')}</span>
                             </div>
                         </div>
                     )}
@@ -1404,9 +1383,494 @@
             );
         };
 
+        // --- COMPONENTE FORM PRODOTTO DISPENSA ---
+        const PantryItemForm = ({ onSave, onCancel, initialData, allIngredients, resolveCategory }) => {
+            const [name, setName] = useState(initialData?.name || '');
+            const [qty, setQty] = useState(initialData?.qty || '');
+            const [unit, setUnit] = useState(initialData?.unit || 'g');
+            const [container, setContainer] = useState(initialData?.container || 'dispensa');
+            const [category, setCategory] = useState(initialData?.category || 'Altro');
+            const [notes, setNotes] = useState(initialData?.notes || '');
+            const [suggestions, setSuggestions] = useState([]);
+
+            const handleNameChange = (val) => {
+                setName(val);
+                if (val.length >= 2) {
+                    const matches = allIngredients.filter(n => n.toLowerCase().includes(val.toLowerCase())).slice(0, 5);
+                    setSuggestions(matches);
+                } else {
+                    setSuggestions([]);
+                }
+                const cat = resolveCategory(val);
+                setCategory(cat);
+            };
+
+            const selectSuggestion = (s) => {
+                setName(s);
+                setSuggestions([]);
+                setCategory(resolveCategory(s));
+            };
+
+            const handleSubmit = () => {
+                if (!name.trim() || !qty) return;
+                onSave({
+                    id: initialData?.id || Date.now() + Math.random(),
+                    name: name.trim(),
+                    qty: parseFloat(String(qty).replace(',', '.')),
+                    unit, container, category, notes
+                });
+            };
+
+            return (
+                <div className="space-y-3">
+                    <div className="relative">
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Nome prodotto</label>
+                        <input type="text" value={name} onChange={(e) => handleNameChange(e.target.value)}
+                            className="w-full border rounded-lg p-2 text-sm" placeholder="Es: Pasta, Pollo, Mozzarella..." autoFocus />
+                        {suggestions.length > 0 && (
+                            <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-32 overflow-y-auto">
+                                {suggestions.map(s => (
+                                    <button key={s} onClick={() => selectSuggestion(s)}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 border-b last:border-0">{s}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1">Quantita</label>
+                            <input type="number" value={qty} onChange={(e) => setQty(e.target.value)}
+                                className="w-full border rounded-lg p-2 text-sm" placeholder="0" min="0" step="1" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1">Unita</label>
+                            <select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+                                <option value="g">g</option><option value="ml">ml</option><option value="pz">pz</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1">Dove</label>
+                            <select value={container} onChange={(e) => setContainer(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+                                <option value="dispensa">Dispensa</option><option value="frigo">Frigo</option><option value="freezer">Freezer</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Categoria</label>
+                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+                            {CATEGORY_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Note (opzionale)</label>
+                        <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
+                            className="w-full border rounded-lg p-2 text-sm" placeholder="Es: surgelato pronto, da scongelare..." />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                        <button onClick={handleSubmit} className="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-emerald-700">
+                            {initialData ? 'Salva Modifiche' : 'Aggiungi'}
+                        </button>
+                        <button onClick={onCancel} className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm hover:bg-slate-300">Annulla</button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MODAL SCANSIONE SCONTRINO ---
+        const ReceiptScanModal = ({ isOpen, onClose, onAddProducts, existingPantry, resolveCategory }) => {
+            const [step, setStep] = useState(0);
+            const [images, setImages] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [proposedProducts, setProposedProducts] = useState([]);
+
+            useEffect(() => {
+                if (!isOpen) { setStep(0); setImages([]); setError(null); setProposedProducts([]); }
+            }, [isOpen]);
+
+            const handleImageAdd = (e) => {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        setImages(prev => [...prev, { data: ev.target.result, name: file.name }]);
+                    };
+                    reader.readAsDataURL(file);
+                });
+                e.target.value = '';
+            };
+
+            const removeImage = (idx) => {
+                setImages(prev => prev.filter((_, i) => i !== idx));
+            };
+
+            const handleScan = async () => {
+                if (images.length === 0) return;
+                setStep(1);
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const resp = await fetch('/.netlify/functions/generate-recipe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            mode: 'parse_receipt',
+                            images: images.map(img => img.data),
+                            existingPantry: existingPantry.map(p => ({ name: p.name, qty: p.qty, unit: p.unit, container: p.container })),
+                        })
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data.error || 'Errore nella scansione');
+
+                    const products = (data.products || []).map((p, i) => {
+                        const match = existingPantry.find(ep =>
+                            ep.name.toLowerCase() === p.name.toLowerCase() && ep.unit === p.unit
+                        );
+                        return {
+                            ...p,
+                            id: Date.now() + i,
+                            category: p.category || resolveCategory(p.name),
+                            container: p.container || 'dispensa',
+                            existingQty: match ? match.qty : 0,
+                            include: true,
+                        };
+                    });
+                    setProposedProducts(products);
+                    setStep(2);
+                } catch (err) {
+                    setError(err.message);
+                    setStep(0);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updateProduct = (idx, field, value) => {
+                setProposedProducts(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+            };
+
+            const handleConfirm = () => {
+                const toAdd = proposedProducts.filter(p => p.include).map(p => ({
+                    name: p.name, qty: p.qty, unit: p.unit, container: p.container, category: p.category, notes: ''
+                }));
+                onAddProducts(toAdd);
+                onClose();
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Scansione Scontrino">
+                    <div className="space-y-4">
+                        {step === 0 && (
+                            <>
+                                <p className="text-sm text-slate-600">Scatta o carica foto dello scontrino. L'AI analizzerà i prodotti.</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {images.map((img, idx) => (
+                                        <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border">
+                                            <img src={img.data} alt={img.name} className="w-full h-full object-cover" />
+                                            <button onClick={() => removeImage(idx)}
+                                                className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">x</button>
+                                        </div>
+                                    ))}
+                                    <label className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center cursor-pointer hover:border-slate-400">
+                                        <input type="file" accept="image/*" capture="environment" multiple onChange={handleImageAdd} className="hidden" />
+                                        <Icons.Camera />
+                                    </label>
+                                </div>
+                                {error && <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
+                                <button onClick={handleScan} disabled={images.length === 0}
+                                    className="w-full bg-violet-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                                    <Icons.Sparkle /> Analizza Scontrino
+                                </button>
+                            </>
+                        )}
+
+                        {step === 1 && loading && (
+                            <div className="text-center py-8">
+                                <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-violet-600" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                <p className="text-slate-600 font-bold">Analisi in corso...</p>
+                                <p className="text-xs text-slate-400 mt-1">Claude sta leggendo lo scontrino</p>
+                            </div>
+                        )}
+
+                        {step === 2 && (
+                            <>
+                                <p className="text-sm text-slate-600 font-bold">Prodotti trovati: {proposedProducts.length}</p>
+                                <div className="max-h-[50vh] overflow-y-auto space-y-2">
+                                    {proposedProducts.map((p, idx) => (
+                                        <div key={idx} className={`border rounded-lg p-3 space-y-2 ${p.include ? 'bg-white' : 'bg-slate-50 opacity-50'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <input type="checkbox" checked={p.include} onChange={(e) => updateProduct(idx, 'include', e.target.checked)} />
+                                                <input type="text" value={p.name} onChange={(e) => updateProduct(idx, 'name', e.target.value)}
+                                                    className="flex-1 border rounded px-2 py-1 text-sm font-bold" />
+                                                <input type="number" value={p.qty} onChange={(e) => updateProduct(idx, 'qty', parseFloat(e.target.value) || 0)}
+                                                    className="w-16 border rounded px-2 py-1 text-sm text-right" min="0" />
+                                                <select value={p.unit} onChange={(e) => updateProduct(idx, 'unit', e.target.value)} className="border rounded px-1 py-1 text-sm">
+                                                    <option value="g">g</option><option value="ml">ml</option><option value="pz">pz</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <select value={p.container} onChange={(e) => updateProduct(idx, 'container', e.target.value)} className="border rounded px-1 py-0.5 text-xs">
+                                                    <option value="dispensa">Dispensa</option><option value="frigo">Frigo</option><option value="freezer">Freezer</option>
+                                                </select>
+                                                <select value={p.category} onChange={(e) => updateProduct(idx, 'category', e.target.value)} className="border rounded px-1 py-0.5 text-xs">
+                                                    {CATEGORY_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
+                                                </select>
+                                                {p.existingQty > 0 && (
+                                                    <span className="text-amber-600 font-bold">Gia presente: {p.existingQty}{p.unit}</span>
+                                                )}
+                                                {p.rawText && <span className="text-slate-400 truncate" title={p.rawText}>({p.rawText})</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {proposedProducts.length === 0 && (
+                                    <div className="text-center text-slate-400 py-4">Nessun prodotto trovato nello scontrino.</div>
+                                )}
+                                <div className="flex gap-2">
+                                    <button onClick={handleConfirm} disabled={proposedProducts.filter(p => p.include).length === 0}
+                                        className="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50">
+                                        Aggiungi {proposedProducts.filter(p => p.include).length} prodotti
+                                    </button>
+                                    <button onClick={onClose} className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm hover:bg-slate-300">Annulla</button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Modal>
+            );
+        };
+
+        // --- MODAL CONFERMA SCARICO ---
+        const DeductionConfirmModal = ({ isOpen, onClose, slot, recipes, pantry, findPantryMatch, onConfirm }) => {
+            const [deductions, setDeductions] = useState([]);
+
+            useEffect(() => {
+                if (!isOpen || !slot) return;
+                const items = [];
+                if (slot.tracks) {
+                    Object.values(slot.tracks).forEach(track => {
+                        const rec = getRecipeById(track.recipe, recipes);
+                        if (rec) {
+                            rec.ingredients.forEach(ing => {
+                                if (ing.unit === 'qb') return;
+                                const needed = ing.qty * (track.portions || 1);
+                                const match = findPantryMatch(ing.name, ing.unit);
+                                const existing = items.find(d => d.ingredientName === ing.name && d.unit === ing.unit);
+                                if (existing) {
+                                    existing.amount += needed;
+                                } else {
+                                    items.push({
+                                        ingredientName: ing.name,
+                                        unit: ing.unit,
+                                        amount: needed,
+                                        pantryItemId: match?.id || null,
+                                        available: match?.qty || 0,
+                                        enabled: !!match,
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                setDeductions(items);
+            }, [isOpen, slot]);
+
+            const updateDeduction = (idx, field, value) => {
+                setDeductions(prev => prev.map((d, i) => i === idx ? { ...d, [field]: value } : d));
+            };
+
+            const handleConfirm = () => {
+                const toDeduct = deductions.filter(d => d.enabled && d.pantryItemId)
+                    .map(d => ({ pantryItemId: d.pantryItemId, amount: d.amount }));
+                onConfirm(toDeduct);
+                onClose();
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title={`Scarico: ${slot?.day} ${slot?.meal}`}>
+                    <div className="space-y-3">
+                        <p className="text-sm text-slate-600">Conferma gli ingredienti da scalare dalla dispensa:</p>
+                        <div className="max-h-[50vh] overflow-y-auto space-y-2">
+                            {deductions.map((d, idx) => (
+                                <div key={idx} className={`flex items-center gap-2 p-2 rounded-lg border ${d.pantryItemId ? 'bg-white' : 'bg-slate-50'}`}>
+                                    <input type="checkbox" checked={d.enabled} onChange={(e) => updateDeduction(idx, 'enabled', e.target.checked)}
+                                        disabled={!d.pantryItemId} />
+                                    <span className={`flex-1 text-sm ${d.pantryItemId ? 'text-slate-800' : 'text-slate-400'}`}>{d.ingredientName}</span>
+                                    <input type="number" value={d.amount} onChange={(e) => updateDeduction(idx, 'amount', parseFloat(e.target.value) || 0)}
+                                        className="w-16 border rounded px-2 py-1 text-sm text-right" min="0" step="1" />
+                                    <span className="text-xs text-slate-500">{d.unit}</span>
+                                    {d.pantryItemId ? (
+                                        <span className="text-xs text-emerald-600">({d.available}{d.unit} disp.)</span>
+                                    ) : (
+                                        <span className="text-xs text-slate-400">(non in dispensa)</span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        {deductions.length === 0 && <p className="text-center text-slate-400 text-sm py-4">Nessun ingrediente da scalare.</p>}
+                        <div className="flex gap-2 pt-2">
+                            <button onClick={handleConfirm}
+                                className="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-emerald-700">
+                                Conferma Scarico
+                            </button>
+                            <button onClick={onClose}
+                                className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm hover:bg-slate-300">
+                                Salta
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        };
+
+        // --- VISTA DISPENSA ---
+        const PantryView = ({ pantry, onAdd, onRemove, onUpdate, onOpenReceipt, resolveCategory, allIngredients }) => {
+            const [activeContainer, setActiveContainer] = useState('all');
+            const [search, setSearch] = useState('');
+            const [editingItem, setEditingItem] = useState(null);
+            const [showAddForm, setShowAddForm] = useState(false);
+
+            const filtered = useMemo(() => {
+                let items = pantry;
+                if (activeContainer !== 'all') items = items.filter(p => p.container === activeContainer);
+                if (search) {
+                    const s = search.toLowerCase();
+                    items = items.filter(p => p.name.toLowerCase().includes(s));
+                }
+                return items;
+            }, [pantry, activeContainer, search]);
+
+            const grouped = useMemo(() => {
+                const groups = {};
+                filtered.forEach(item => {
+                    const cat = item.category || resolveCategory(item.name);
+                    if (!groups[cat]) groups[cat] = [];
+                    groups[cat].push(item);
+                });
+                return CATEGORY_ORDER.filter(c => groups[c]).map(c => ({ category: c, items: groups[c] }));
+            }, [filtered]);
+
+            const containerCounts = useMemo(() => ({
+                dispensa: pantry.filter(p => p.container === 'dispensa').length,
+                frigo: pantry.filter(p => p.container === 'frigo').length,
+                freezer: pantry.filter(p => p.container === 'freezer').length,
+            }), [pantry]);
+
+            const handleQuickQty = (item, delta) => {
+                const newQty = Math.max(0, item.qty + delta);
+                if (newQty === 0) {
+                    if (confirm(`Rimuovere ${item.name} dalla dispensa?`)) onRemove(item.id);
+                } else {
+                    onUpdate(item.id, { qty: newQty });
+                }
+            };
+
+            const handleSaveItem = (item) => {
+                if (editingItem) {
+                    onUpdate(item.id, item);
+                } else {
+                    onAdd([item]);
+                }
+                setEditingItem(null);
+                setShowAddForm(false);
+            };
+
+            return (
+                <div className="space-y-4 pb-20">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-slate-800">Dispensa</h2>
+                        <div className="flex gap-2">
+                            <button onClick={onOpenReceipt} className="bg-violet-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow hover:bg-violet-700 flex items-center gap-1">
+                                <Icons.Camera /> <span className="hidden md:inline">Scontrino</span>
+                            </button>
+                            <button onClick={() => { setEditingItem(null); setShowAddForm(true); }}
+                                className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow hover:bg-emerald-700">+ Aggiungi</button>
+                        </div>
+                    </div>
+
+                    {/* Container badges */}
+                    <div className="flex gap-2">
+                        <button onClick={() => setActiveContainer('all')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold ${activeContainer === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+                            Tutto ({pantry.length})
+                        </button>
+                        {Object.entries(CONTAINER_INFO).map(([key, info]) => (
+                            <button key={key} onClick={() => setActiveContainer(key)}
+                                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${activeContainer === key ? 'bg-slate-800 text-white' : info.color}`}>
+                                {info.emoji} {info.label} ({containerCounts[key]})
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Search */}
+                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Cerca prodotto..." className="w-full border rounded-lg p-2 text-sm" />
+
+                    {/* Add/Edit form in modal */}
+                    {(showAddForm || editingItem) && (
+                        <Modal isOpen={true} onClose={() => { setShowAddForm(false); setEditingItem(null); }}
+                            title={editingItem ? 'Modifica Prodotto' : 'Aggiungi Prodotto'}>
+                            <PantryItemForm
+                                onSave={handleSaveItem}
+                                onCancel={() => { setShowAddForm(false); setEditingItem(null); }}
+                                initialData={editingItem}
+                                allIngredients={allIngredients}
+                                resolveCategory={resolveCategory}
+                            />
+                        </Modal>
+                    )}
+
+                    {/* Products list */}
+                    {pantry.length === 0 ? (
+                        <Card className="p-8 text-center text-slate-400">
+                            <p className="text-lg mb-2">Dispensa vuota</p>
+                            <p className="text-sm">Aggiungi prodotti manualmente o scansiona uno scontrino.</p>
+                        </Card>
+                    ) : filtered.length === 0 ? (
+                        <Card className="p-8 text-center text-slate-400">Nessun prodotto trovato.</Card>
+                    ) : (
+                        <div className="space-y-4">
+                            {grouped.map(({ category, items }) => (
+                                <div key={category} className="bg-white rounded-xl shadow overflow-hidden">
+                                    <div className={`px-4 py-2 font-bold text-sm ${CATEGORY_COLORS[category] || 'bg-slate-100 text-slate-700'}`}>
+                                        {category} ({items.length})
+                                    </div>
+                                    {items.map(item => (
+                                        <div key={item.id} className="flex items-center p-3 border-b border-slate-100 gap-2">
+                                            <span className="text-sm mr-1">{CONTAINER_INFO[item.container]?.emoji}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-bold text-slate-800 truncate">{item.name}</div>
+                                                {item.notes && <div className="text-xs text-slate-400 truncate">{item.notes}</div>}
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <button onClick={() => handleQuickQty(item, -(item.unit === 'pz' ? 1 : (item.unit === 'g' ? 50 : 50)))}
+                                                    className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200">
+                                                    <Icons.Minus />
+                                                </button>
+                                                <span className="font-bold text-sm text-slate-700 min-w-[50px] text-center">{item.qty}{item.unit}</span>
+                                                <button onClick={() => handleQuickQty(item, item.unit === 'pz' ? 1 : (item.unit === 'g' ? 50 : 50))}
+                                                    className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 text-lg leading-none">+</button>
+                                            </div>
+                                            <button onClick={() => setEditingItem(item)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400"><Icons.Edit /></button>
+                                            <button onClick={() => { if (confirm(`Rimuovere ${item.name}?`)) onRemove(item.id); }} className="p-1.5 hover:bg-red-50 rounded text-red-400"><Icons.Trash /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         // --- SEZIONE SVILUPPO ---
         const SviluppoView = () => {
-            const APP_VERSION = "3.1.0";
+            const APP_VERSION = "4.0.0";
             const LAST_UPDATE = "Aprile 2026";
 
             const features = [
@@ -1424,17 +1888,22 @@
                 { status: 'done', label: 'Accessibilita base', desc: 'ARIA labels, navigazione semantica, focus trap modal, reduced motion' },
                 { status: 'done', label: 'Piani alimentari multipli configurabili', desc: 'Ogni membro della famiglia puo\' avere il proprio piano con categorie, target e conflitti personalizzati' },
                 { status: 'done', label: 'Metodi di cottura preferiti', desc: 'Selezione metodi cottura nel generatore AI per ricette piu\' mirate' },
-                { status: 'done', label: 'AI: piano settimanale automatico', desc: 'Genera un piano completo con ingredienti frigo prioritizzati nei primi giorni ed esclusi dalla spesa' },
+                { status: 'done', label: 'AI: piano settimanale automatico', desc: 'Genera un piano completo tenendo conto della dispensa e dei prodotti disponibili' },
                 { status: 'done', label: 'Error Boundary', desc: 'Gestione errori con schermata di recupero invece di schermo bianco' },
                 { status: 'done', label: 'Offline persistence', desc: 'Cache Firestore locale per funzionamento offline' },
                 { status: 'done', label: 'Rate limit AI', desc: 'Cooldown 10 secondi tra le generazioni AI per evitare costi accidentali' },
+                { status: 'done', label: 'Gestione dispensa completa', desc: 'Inventario prodotti con 3 contenitori (Dispensa, Frigo, Freezer), quantita nette e categorie' },
+                { status: 'done', label: 'Inserimento da foto scontrino', desc: 'Claude Vision analizza foto dello scontrino e propone prodotti da aggiungere alla dispensa' },
+                { status: 'done', label: 'Scarico ingredienti ibrido', desc: 'Proposta automatica di scarico dopo pasto completato + gestione manuale per consumi extra' },
+                { status: 'done', label: 'Spesa intelligente con dispensa', desc: 'Lista spesa calcola solo la differenza tra necessario e disponibile in dispensa' },
+                { status: 'done', label: 'AI: categorizzazione automatica ingredienti', desc: 'Categoria assegnata automaticamente con apprendimento dalle scelte utente' },
+                { status: 'done', label: 'AI: pianificazione con dispensa', desc: 'L\'AI tiene conto automaticamente dei prodotti in dispensa per il piano settimanale' },
             ];
 
             const roadmap = [
                 { priority: 'alta', label: 'Autenticazione Firebase', desc: 'Login Google per proteggere i dati della famiglia con accesso sicuro' },
                 { priority: 'media', label: 'Drag & drop piano', desc: 'Riorganizzare i pasti trascinando le ricette tra gli slot' },
                 { priority: 'media', label: 'Storico settimane', desc: 'Visualizzare e confrontare piani delle settimane passate' },
-                { priority: 'media', label: 'AI: categorizzazione automatica ingredienti', desc: 'L\'AI assegna automaticamente la categoria a ingredienti nuovi' },
                 { priority: 'bassa', label: 'Notifiche push', desc: 'Promemoria per la preparazione pasti e la spesa' },
                 { priority: 'bassa', label: 'Multi-famiglia', desc: 'Supporto per piu famiglie/utenti con dati separati' },
                 { priority: 'bassa', label: 'Tema scuro', desc: 'Dark mode per uso serale' },
@@ -1444,6 +1913,7 @@
                 { category: 'AI (Claude API)', items: [
                     { label: 'Genera 2-3 ricette', detail: '~1500 token in + ~800 token out', cost: '~$0.01' },
                     { label: 'Piano settimanale completo', detail: '~3000 token in + ~2000 token out', cost: '~$0.025' },
+                    { label: 'Analisi foto scontrino', detail: '~2000 token in (con immagine) + ~1000 token out', cost: '~$0.02-0.05' },
                     { label: 'Uso familiare tipico', detail: '~4-8 chiamate/settimana', cost: '~$0.50-1.00/mese' },
                 ]},
                 { category: 'Infrastruttura', items: [
@@ -1468,12 +1938,13 @@
                         <h3 className="font-bold text-slate-800 mb-2">Il Progetto</h3>
                         <p className="text-sm text-slate-600 leading-relaxed">
                             Un'app pensata per famiglie che vogliono seguire un piano alimentare sano senza impazzire nell'organizzazione.
-                            L'obiettivo e rendere <strong>pratico e veloce</strong> pianificare i pasti settimanali, ottimizzare la spesa,
-                            e adattare le routine alimentari familiari con il supporto dell'intelligenza artificiale.
+                            L'obiettivo e rendere <strong>pratico e veloce</strong> pianificare i pasti settimanali, gestire la dispensa,
+                            ottimizzare la spesa e adattare le routine alimentari familiari con il supporto dell'intelligenza artificiale.
                         </p>
                         <p className="text-sm text-slate-600 leading-relaxed mt-2">
                             Ideale per <strong>famiglie numerose</strong> dove il tempo e prezioso: doppio binario dieta personale + famiglia,
-                            lista spesa automatica per reparto, e generazione ricette AI che tiene conto delle preferenze di tutti.
+                            gestione dispensa con 3 contenitori (Dispensa, Frigo, Freezer), inserimento prodotti da foto scontrino,
+                            lista spesa intelligente che sottrae il disponibile, e generazione ricette AI che tiene conto di tutto.
                         </p>
                     </Card>
 
@@ -1606,6 +2077,95 @@
             const [aiRecipePrefilledIngredients, setAiRecipePrefilledIngredients] = useState('');
             const openAIModal = () => setIsAIModalOpen(true);
 
+            // --- DISPENSA ---
+            const [pantry, setPantry] = useState([]);
+            const [customCategories, setCustomCategories] = useState({});
+
+            const resolveCategory = (ingredientName) => {
+                if (!ingredientName) return 'Altro';
+                return INGREDIENT_CATEGORIES[ingredientName]
+                    || customCategories[ingredientName.toLowerCase()]
+                    || (pantry.find(p => p.name.toLowerCase() === ingredientName.toLowerCase()) || {}).category
+                    || 'Altro';
+            };
+            // Aggiorna il riferimento globale usato da ShoppingListView
+            getIngredientCategory = resolveCategory;
+
+            const learnCategory = (ingredientName, category) => {
+                if (!ingredientName || INGREDIENT_CATEGORIES[ingredientName]) return;
+                const updated = { ...customCategories, [ingredientName.toLowerCase()]: category };
+                setCustomCategories(updated);
+                saveToCloud({ customCategories: updated });
+            };
+
+            const findPantryMatch = (ingredientName, unit) => {
+                if (!ingredientName) return null;
+                const nameLower = ingredientName.toLowerCase();
+                return pantry.find(p => {
+                    const pLower = p.name.toLowerCase();
+                    return (pLower === nameLower || pLower.includes(nameLower) || nameLower.includes(pLower))
+                        && (!unit || p.unit === unit);
+                });
+            };
+
+            const addToPantry = (items) => {
+                let updated = [...pantry];
+                items.forEach(item => {
+                    const existing = updated.find(p =>
+                        p.name.toLowerCase() === item.name.toLowerCase() && p.unit === item.unit && p.container === item.container
+                    );
+                    if (existing) {
+                        existing.qty += item.qty;
+                    } else {
+                        updated.push({ ...item, id: Date.now() + Math.random() });
+                    }
+                    if (item.category && item.category !== 'Altro') {
+                        learnCategory(item.name, item.category);
+                    }
+                });
+                setPantry(updated);
+                saveToCloud({ pantry: updated });
+            };
+
+            const removeFromPantry = (id) => {
+                const updated = pantry.filter(p => p.id !== id);
+                setPantry(updated);
+                saveToCloud({ pantry: updated });
+            };
+
+            const updatePantryItem = (id, updates) => {
+                const updated = pantry.map(p => p.id === id ? { ...p, ...updates } : p);
+                setPantry(updated);
+                saveToCloud({ pantry: updated });
+                if (updates.category && updates.name) {
+                    learnCategory(updates.name, updates.category);
+                }
+            };
+
+            const deductFromPantry = (deductions) => {
+                const updated = pantry.map(item => {
+                    const d = deductions.find(d => d.pantryItemId === item.id);
+                    if (d) return { ...item, qty: Math.max(0, item.qty - d.amount) };
+                    return item;
+                }).filter(item => item.qty > 0);
+                setPantry(updated);
+                saveToCloud({ pantry: updated });
+            };
+
+            // --- DEDUCTION MODAL ---
+            const [deductionModal, setDeductionModal] = useState(null);
+
+            const markSlotDone = (slot) => {
+                if (!slot) return;
+                const slotIndex = plan.findIndex(s => s.day === slot.day && s.meal === slot.meal);
+                if (slotIndex >= 0 && !plan[slotIndex].done) {
+                    const newPlan = plan.map((s, i) => i === slotIndex ? { ...s, done: true } : s);
+                    const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: newPlan };
+                    setWeeklyPlans(newWeeklyPlans);
+                    saveToCloud({ weeklyPlans: newWeeklyPlans });
+                }
+            };
+
             // Aggiorna variabili globali derivate quando dietPlans cambia
             useEffect(() => {
                 MEAL_TYPES = getAllMealTypes(dietPlans);
@@ -1636,7 +2196,7 @@
                 }
                 pendingDataRef.current = null;
                 setSyncStatus('sync');
-                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, lastUpdate: new Date().toISOString(), ...dataToUpdate };
+                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, pantry, customCategories, lastUpdate: new Date().toISOString(), ...dataToUpdate };
                 db.collection('app_pasti').doc(DOC_ID).set(fullData)
                     .then(() => setTimeout(() => setSyncStatus('saved'), 500))
                     .catch((err) => { console.error(err); setSyncStatus('error'); });
@@ -1659,7 +2219,7 @@
             useEffect(() => {
                 const handleBeforeUnload = () => {
                     if (pendingDataRef.current && db) {
-                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
+                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, pantry, customCategories, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
                         navigator.sendBeacon && db.collection('app_pasti').doc(DOC_ID).set(fullData);
                     }
                 };
@@ -1722,6 +2282,13 @@
 
                             if (data.fridgeIngredients) {
                                 setFridgeIngredients(data.fridgeIngredients);
+                            }
+
+                            if (data.pantry) {
+                                setPantry(data.pantry);
+                            }
+                            if (data.customCategories) {
+                                setCustomCategories(data.customCategories);
                             }
 
                             if (data.lastUpdate) {
@@ -1996,27 +2563,78 @@
             };
 
             const currentFridgeList = fridgeIngredients[currentWeekKey] || [];
-            const fridgeListLower = currentFridgeList.map(n => n.toLowerCase().trim());
 
+            // Lista di tutti i nomi ingredienti unici (per autocomplete dispensa)
+            const allIngredientNames = useMemo(() => {
+                const names = new Set();
+                recipes.forEach(r => r.ingredients?.forEach(i => names.add(i.name)));
+                pantry.forEach(p => names.add(p.name));
+                Object.keys(INGREDIENT_CATEGORIES).forEach(k => names.add(k));
+                return Array.from(names).sort();
+            }, [recipes, pantry]);
+
+            const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+            // --- SPESA INTELLIGENTE: necessario - disponibile in dispensa ---
             const shoppingList = useMemo(() => {
-                const list = {};
+                const needed = {};
                 plan.forEach(slot => {
                     if (!slot.tracks) return;
                     Object.values(slot.tracks).forEach(track => {
                         const rec = getRecipeById(track.recipe, recipes);
                         if (rec) {
                             rec.ingredients.forEach(ing => {
-                                const ingLower = ing.name.toLowerCase();
-                                if (fridgeListLower.some(fi => ingLower.includes(fi) || fi.includes(ingLower))) return;
-                                const key = `${ing.name} (${ing.unit})`;
-                                if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
-                                list[key].qty += ing.qty * (track.portions || 0);
+                                if (ing.unit === 'qb') return;
+                                const key = `${ing.name.toLowerCase()}|${ing.unit}`;
+                                if (!needed[key]) needed[key] = { name: ing.name, unit: ing.unit, qty: 0 };
+                                needed[key].qty += ing.qty * (track.portions || 0);
                             });
                         }
                     });
                 });
-                return Object.values(list).sort((a, b) => a.name.localeCompare(b.name));
-            }, [plan, recipes, fridgeListLower]);
+
+                // Sottrai quantita disponibili in dispensa
+                Object.values(needed).forEach(item => {
+                    const nameLower = item.name.toLowerCase();
+                    const matches = pantry.filter(p =>
+                        p.name.toLowerCase() === nameLower && p.unit === item.unit
+                    );
+                    const available = matches.reduce((sum, m) => sum + m.qty, 0);
+                    if (available > 0) {
+                        item.available = available;
+                        item.qty = Math.max(0, item.qty - available);
+                    }
+                });
+
+                return Object.values(needed)
+                    .filter(item => item.qty > 0)
+                    .sort((a, b) => a.name.localeCompare(b.name));
+            }, [plan, recipes, pantry]);
+
+            // Prodotti completamente coperti dalla dispensa
+            const pantryCovered = useMemo(() => {
+                const needed = {};
+                plan.forEach(slot => {
+                    if (!slot.tracks) return;
+                    Object.values(slot.tracks).forEach(track => {
+                        const rec = getRecipeById(track.recipe, recipes);
+                        if (rec) {
+                            rec.ingredients.forEach(ing => {
+                                if (ing.unit === 'qb') return;
+                                const key = `${ing.name.toLowerCase()}|${ing.unit}`;
+                                if (!needed[key]) needed[key] = { name: ing.name, unit: ing.unit, qty: 0 };
+                                needed[key].qty += ing.qty * (track.portions || 0);
+                            });
+                        }
+                    });
+                });
+                return Object.values(needed).filter(item => {
+                    const nameLower = item.name.toLowerCase();
+                    const available = pantry.filter(p => p.name.toLowerCase() === nameLower && p.unit === item.unit)
+                        .reduce((sum, m) => sum + m.qty, 0);
+                    return available >= item.qty && item.qty > 0;
+                });
+            }, [plan, recipes, pantry]);
 
             const handleCopy = () => {
                 const text = shoppingList.map(item => `- ${item.name}: ${item.qty} ${item.unit}`).join('\n');
@@ -2054,6 +2672,9 @@
                                 <button role="tab" aria-selected={activeTab === 'shop'} onClick={() => setActiveTab('shop')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'shop' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.ShoppingCart /> Spesa
                                 </button>
+                                <button role="tab" aria-selected={activeTab === 'pantry'} onClick={() => setActiveTab('pantry')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'pantry' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
+                                    <Icons.Pantry /> Dispensa
+                                </button>
                                 <button role="tab" aria-selected={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'recipes' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.BookOpen /> Ricette
                                 </button>
@@ -2077,8 +2698,12 @@
                                 resetData={resetData}
                                 handlePrint={handlePrint}
                                 openAIWeeklyModal={() => setIsAIWeeklyModalOpen(true)}
+                                onMarkDone={(slot) => {
+                                    if (slot.done) return;
+                                    setDeductionModal(slot);
+                                }}
                             />}
-                            {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={weekChecked} toggleCheck={toggleCheck} fridgeExcluded={currentFridgeList} />}
+                            {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={weekChecked} toggleCheck={toggleCheck} pantryCovered={pantryCovered} />}
                             {activeTab === 'recipes' &&
                                 <RecipesView
                                     recipes={recipes}
@@ -2089,6 +2714,15 @@
                                     openAIModal={openAIModal}
                                 />
                             }
+                            {activeTab === 'pantry' && <PantryView
+                                pantry={pantry}
+                                onAdd={addToPantry}
+                                onRemove={removeFromPantry}
+                                onUpdate={updatePantryItem}
+                                onOpenReceipt={() => setIsReceiptModalOpen(true)}
+                                resolveCategory={resolveCategory}
+                                allIngredients={allIngredientNames}
+                            />}
                             {activeTab === 'dev' && <SviluppoView />}
                             {activeTab === 'settings' && <SettingsView dietPlans={dietPlans} onSavePlans={saveDietPlans} resetData={resetData} />}
                         </main>
@@ -2116,19 +2750,35 @@
                         onClose={() => setIsAIWeeklyModalOpen(false)}
                         recipes={recipes}
                         dietPlans={dietPlans}
-                        onApplyPlan={(newPlan, fridgeList) => {
+                        pantry={pantry}
+                        onApplyPlan={(newPlan) => {
                             const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: newPlan };
                             setWeeklyPlans(newWeeklyPlans);
-                            const newFridge = fridgeList.length > 0
-                                ? { ...fridgeIngredients, [currentWeekKey]: fridgeList }
-                                : fridgeIngredients;
-                            setFridgeIngredients(newFridge);
-                            saveToCloud({ weeklyPlans: newWeeklyPlans, fridgeIngredients: newFridge });
+                            saveToCloud({ weeklyPlans: newWeeklyPlans });
                         }}
-                        onOpenAIRecipes={(ingredients) => {
-                            setAiRecipePrefilledIngredients(ingredients);
-                            setIsAIWeeklyModalOpen(false);
-                            setIsAIModalOpen(true);
+                    />
+
+                    <ReceiptScanModal
+                        isOpen={isReceiptModalOpen}
+                        onClose={() => setIsReceiptModalOpen(false)}
+                        onAddProducts={addToPantry}
+                        existingPantry={pantry}
+                        resolveCategory={resolveCategory}
+                    />
+
+                    <DeductionConfirmModal
+                        isOpen={!!deductionModal}
+                        onClose={() => {
+                            // Mark slot as done (skip or X)
+                            markSlotDone(deductionModal);
+                            setDeductionModal(null);
+                        }}
+                        slot={deductionModal}
+                        recipes={recipes}
+                        pantry={pantry}
+                        findPantryMatch={findPantryMatch}
+                        onConfirm={(deductions) => {
+                            deductFromPantry(deductions);
                         }}
                     />
                 </div>
