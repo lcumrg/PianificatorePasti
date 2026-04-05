@@ -117,9 +117,113 @@ exports.handler = async (event) => {
 
     const { mode } = body;
 
+    // ==================== MODO: PARSE RECEIPT ====================
+    if (mode === 'parse_receipt') {
+        const { images, existingPantry } = body;
+
+        if (!images || images.length === 0) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessuna immagine fornita' }) };
+        }
+
+        const pantryList = (existingPantry || []).map(p => `${p.name} (${p.qty}${p.unit}, ${p.container})`).join(', ');
+
+        const systemPrompt = `Sei un assistente specializzato nell'analisi di scontrini della spesa italiana.
+Il tuo compito è estrarre i prodotti alimentari dallo scontrino e normalizzarli.
+
+REGOLE:
+1. NORMALIZZA i nomi: rimuovi marche, codici, abbreviazioni. Es: "MOZZ. S.LUCIA 125G" → "Mozzarella"
+2. DEDUCI le quantità nette dal testo quando possibile (125G → qty: 125, unit: "g")
+3. Se la quantità non è chiara, usa un valore tipico (es: 1 pacco di pasta = 500g, 1 bottiglia latte = 1000ml)
+4. Per prodotti venduti a pezzi (es: 6 uova, 1 insalata), usa unit: "pz"
+5. SUGGERISCI il contenitore appropriato:
+   - "frigo": latticini, carne fresca, salumi, pesce fresco, verdure fresche, uova
+   - "freezer": surgelati, gelati, prodotti congelati
+   - "dispensa": pasta, riso, conserve, olio, farina, biscotti, bevande
+6. SUGGERISCI la categoria: "Verdura", "Carne", "Pesce", "Latticini", "Cereali e Pasta", "Legumi", "Dispensa", "Altro"
+7. IGNORA prodotti non alimentari (detersivi, carta, ecc.)
+8. Mantieni il testo originale in "rawText" per riferimento
+
+${pantryList ? `PRODOTTI GIA IN DISPENSA: ${pantryList}\nSe un prodotto dello scontrino corrisponde a uno già in dispensa, segnalalo in "existingMatch" con il nome.` : ''}
+
+FORMATO OUTPUT (rispondi SOLO con JSON valido):
+{
+  "products": [
+    { "name": "Mozzarella", "qty": 125, "unit": "g", "container": "frigo", "category": "Latticini", "rawText": "MOZZ. S.LUCIA 125G", "existingMatch": null }
+  ]
+}`;
+
+        // Build content blocks with images
+        const contentBlocks = [];
+        for (const img of images) {
+            // Extract base64 data and media type from data URL
+            const match = img.match(/^data:(image\/[a-z]+);base64,(.+)$/i);
+            if (match) {
+                contentBlocks.push({
+                    type: 'image',
+                    source: { type: 'base64', media_type: match[1], data: match[2] }
+                });
+            }
+        }
+        contentBlocks.push({ type: 'text', text: 'Analizza questo scontrino ed estrai i prodotti alimentari.' });
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: contentBlocks }]
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error('Claude API error (receipt):', response.status, errText);
+                if (response.status === 429) {
+                    return { statusCode: 429, headers, body: JSON.stringify({ error: 'Troppe richieste. Riprova tra qualche secondo.' }) };
+                }
+                return { statusCode: 502, headers, body: JSON.stringify({ error: 'Errore nella comunicazione con Claude API' }) };
+            }
+
+            const data = await response.json();
+            const content = data.content[0].text;
+
+            let jsonStr = content;
+            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (jsonMatch) jsonStr = jsonMatch[1];
+
+            const parsed = JSON.parse(jsonStr.trim());
+
+            const validProducts = (parsed.products || []).map(p => ({
+                name: String(p.name || ''),
+                qty: Number(p.qty) || 1,
+                unit: ['g', 'ml', 'pz'].includes(p.unit) ? p.unit : 'pz',
+                container: ['dispensa', 'frigo', 'freezer'].includes(p.container) ? p.container : 'dispensa',
+                category: p.category || 'Altro',
+                rawText: p.rawText || '',
+                existingMatch: p.existingMatch || null
+            })).filter(p => p.name.length > 0);
+
+            return {
+                statusCode: 200, headers,
+                body: JSON.stringify({ products: validProducts })
+            };
+
+        } catch (err) {
+            console.error('Function error (parse_receipt):', err);
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Errore interno nella scansione dello scontrino' }) };
+        }
+    }
+
     // ==================== MODO: WEEKLY PLAN ====================
     if (mode === 'weekly_plan') {
-        const { fridgeIngredients, recipes: recipeList, dietPlans, cookingMethods, context } = body;
+        const { pantry: pantryData, fridgeIngredients, recipes: recipeList, dietPlans, cookingMethods, context } = body;
 
         if (!recipeList || recipeList.length === 0) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessuna ricetta nel database. Aggiungi delle ricette prima di generare un piano.' }) };
@@ -153,9 +257,23 @@ exports.handler = async (event) => {
             }).join('\n');
         }
 
-        const fridgeNote = fridgeIngredients && fridgeIngredients.trim()
-            ? `\nINGREDIENTI IN FRIGO DA SMALTIRE: ${fridgeIngredients}\nUSA QUESTI INGREDIENTI nei primi 2-3 giorni della settimana, scegliendo ricette che li contengono.\nSe nessuna ricetta esistente usa uno di questi ingredienti, elencalo in "fridgeIngredientsNotCovered".`
-            : '';
+        // Build pantry note (new system) or fallback to old fridgeIngredients
+        let pantryNote = '';
+        if (pantryData && pantryData.length > 0) {
+            const byContainer = { frigo: [], freezer: [], dispensa: [] };
+            pantryData.forEach(p => {
+                const c = p.container || 'dispensa';
+                if (byContainer[c]) byContainer[c].push(`${p.name} ${p.qty}${p.unit}`);
+            });
+            pantryNote = '\nDISPENSA ATTUALE:';
+            if (byContainer.frigo.length > 0) pantryNote += `\n[Frigo] ${byContainer.frigo.join(', ')}`;
+            if (byContainer.freezer.length > 0) pantryNote += `\n[Freezer] ${byContainer.freezer.join(', ')}`;
+            if (byContainer.dispensa.length > 0) pantryNote += `\n[Dispensa] ${byContainer.dispensa.join(', ')}`;
+            pantryNote += `\n\nISTRUZIONI DISPENSA: Dai PRIORITA ai prodotti del FRIGO (deperibili) nei primi giorni. I prodotti del FREEZER sono congelati. La DISPENSA contiene prodotti a lunga conservazione. Scegli ricette che utilizzino questi ingredienti per ridurre la spesa.`;
+        } else if (fridgeIngredients && fridgeIngredients.trim()) {
+            // Legacy fallback
+            pantryNote = `\nINGREDIENTI IN FRIGO DA SMALTIRE: ${fridgeIngredients}\nUSA QUESTI INGREDIENTI nei primi 2-3 giorni della settimana.`;
+        }
 
         const contextNote = context ? `\nNote aggiuntive: ${context}` : '';
 
@@ -166,7 +284,7 @@ ${recipeCatalog}
 
 TRACKS (piani alimentari) da compilare per ogni pasto:
 ${tracksInfo}
-${fridgeNote}${contextNote}
+${pantryNote}${contextNote}
 
 REGOLE:
 1. Assegna una ricetta a OGNI slot (7 giorni x pranzo e cena = 14 slot)
@@ -186,9 +304,7 @@ FORMATO OUTPUT (rispondi SOLO con JSON valido):
   "weeklyPlan": [
     { "day": "Lunedi", "meal": "Pranzo", "tracks": { "track_id": { "type": "2", "recipeId": 123, "portions": 1 } } },
     { "day": "Lunedi", "meal": "Cena", "tracks": { "track_id": { "type": "3", "recipeId": 456, "portions": 1 } } }
-  ],
-  "fridgeIngredientsUsed": ["ingrediente1", "ingrediente2"],
-  "fridgeIngredientsNotCovered": ["ingrediente3"]
+  ]
 }`;
 
         try {
@@ -249,9 +365,7 @@ FORMATO OUTPUT (rispondi SOLO con JSON valido):
             return {
                 statusCode: 200, headers,
                 body: JSON.stringify({
-                    weeklyPlan: validPlan,
-                    fridgeIngredientsUsed: parsed.fridgeIngredientsUsed || [],
-                    fridgeIngredientsNotCovered: parsed.fridgeIngredientsNotCovered || []
+                    weeklyPlan: validPlan
                 })
             };
 
