@@ -115,41 +115,31 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Body JSON non valido' }) };
     }
 
-    const { mode, ingredients, planSlots, existingRecipeNames, dietPlans, cookingMethods, context } = body;
+    const { ingredients, dietPlans, targetPlan, cookingMethods, context } = body;
     const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods);
 
-    let userPrompt;
-    const contextNote = context ? `\nContesto di oggi: ${context}` : '';
+    if (!ingredients || ingredients.trim().length === 0) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Inserisci almeno un ingrediente' }) };
+    }
 
-    if (mode === 'from_ingredients') {
-        if (!ingredients || ingredients.trim().length === 0) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Inserisci almeno un ingrediente' }) };
+    const contextNote = context ? `\nContesto di oggi: ${context}` : '';
+    const typeHint = body.recipeType ? `\nTipo ricetta richiesto: ${body.recipeType} (rispetta le grammature per questo tipo)` : '';
+    const timeHint = body.maxTime ? `\nTempo massimo di preparazione: ${body.maxTime} minuti` : '';
+
+    let planHint = '';
+    if (targetPlan) {
+        if (targetPlan.isFreeTrack) {
+            planHint = `\nQuesta ricetta è per il piano "${targetPlan.name}" (piano libero, senza vincoli dietetici). Usa tipo "F". Crea ricette gustose e pratiche per tutta la famiglia, senza vincoli di grammature.`;
+        } else if (targetPlan.categories) {
+            const cats = targetPlan.categories.map(c => `tipo "${c.id}" (${c.label}): ${c.guideline}`).join('\n  - ');
+            planHint = `\nQuesta ricetta è per il piano "${targetPlan.name}". Deve rispettare una di queste categorie:\n  - ${cats}\nAssegna il tipo corretto in base agli ingredienti e alle grammature.`;
         }
-        const typeHint = body.recipeType ? `\nTipo ricetta richiesto: ${body.recipeType} (rispetta le grammature per questo tipo)` : '';
-        const timeHint = body.maxTime ? `\nTempo massimo di preparazione: ${body.maxTime} minuti` : '';
-        userPrompt = `Ho questi ingredienti disponibili: ${ingredients}
-${typeHint}${timeHint}${contextNote}
+    }
+
+    const userPrompt = `Ho questi ingredienti disponibili: ${ingredients}
+${typeHint}${timeHint}${planHint}${contextNote}
 Genera 2-3 ricette usando principalmente questi ingredienti. Puoi aggiungere solo condimenti base (olio, sale, spezie) se mancano. Ogni ricetta deve avere un tipo (1-4 o F) e rispettare le grammature dietetiche.
 Includi un "tip" pratico per ogni ricetta (es. "si può preparare la sera prima", "i bambini lo adorano con un filo di parmigiano").`;
-
-    } else if (mode === 'from_plan') {
-        if (!planSlots || planSlots.length === 0) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessuno slot vuoto nel piano' }) };
-        }
-        const existing = existingRecipeNames ? `\nRicette già nel database (evita duplicati): ${existingRecipeNames.join(', ')}` : '';
-        const slotsDesc = planSlots.map(s => `- ${s.day} ${s.meal}: tipo ${s.type}`).join('\n');
-        userPrompt = `Devo completare il piano settimanale. Genera UNA ricetta per ciascuno di questi slot vuoti:
-${slotsDesc}
-${existing}${contextNote}
-IMPORTANTE:
-- Genera ricette VARIE tra loro (non ripetere proteine o contorni uguali)
-- Ottimizza gli ingredienti: favorisci ingredienti che si riusano tra più ricette (es. se usi zucchine lunedì, suggeriscile anche mercoledì)
-- Alterna cotture diverse (forno, padella, bollitura, crudo)
-- Includi un "tip" pratico per ogni ricetta`;
-
-    } else {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Mode non valido. Usa "from_ingredients" o "from_plan"' }) };
-    }
 
     try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
