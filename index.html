@@ -689,7 +689,7 @@
                                             <div>
                                                 <span className="font-bold text-slate-800">{recipe.name}</span>
                                                 <div className="flex gap-1 mt-1">
-                                                    <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full">{typeLabels[recipe.type] || recipe.type}</span>
+                                                    <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full">{MEAL_TYPES.find(t => t.startsWith(recipe.type)) || recipe.type}</span>
                                                     {recipe.prepTime && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{recipe.prepTime} min</span>}
                                                 </div>
                                             </div>
