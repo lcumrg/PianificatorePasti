@@ -299,7 +299,9 @@
                                 (dp.conflicts || []).forEach(c => {
                                     const [a, b] = c.split(':');
                                     if ((t1 === a && t2 === b) || (t1 === b && t2 === a)) {
-                                        conflicts.push(plan[i].day);
+                                        const labelA = dp.categories.find(cat => cat.id === t1)?.label || t1;
+                                        const labelB = dp.categories.find(cat => cat.id === t2)?.label || t2;
+                                        conflicts.push(`${plan[i].day}: ${labelA} + ${labelB}`);
                                     }
                                 });
                             }
@@ -993,7 +995,7 @@
             );
         };
 
-        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIWeeklyModal, onMarkDone }) => {
+        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIWeeklyModal, onMarkDone, onClearPlan }) => {
             const weekDates = getDatesOfWeek(currentWeek);
             return (
                 <div className="space-y-6 pb-20">
@@ -1005,6 +1007,7 @@
                         </div>
                         <div className="flex gap-2">
                             <button onClick={openAIWeeklyModal} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Sparkle /> Piano AI</button>
+                            <button onClick={onClearPlan} className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold hover:bg-red-100"><Icons.Trash /> Svuota</button>
                             <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Print /> Stampa</button>
                         </div>
                     </div>
@@ -1280,7 +1283,11 @@
                 }
             };
 
+            // Calcola se qualche piano non-free ha target > 14
+            const hasTargetOverflow = localPlans.some(p => !p.isFreeTrack && p.categories.length > 0 && p.categories.reduce((s, c) => s + c.target, 0) > 14);
+
             const handleSave = () => {
+                if (hasTargetOverflow) return;
                 onSavePlans(localPlans);
                 setSaved(true);
                 setTimeout(() => setSaved(false), 2000);
@@ -1316,7 +1323,11 @@
                                     )}
                                 </div>
 
-                                {!plan.isFreeTrack && (
+                                {!plan.isFreeTrack && (() => {
+                                    const totalTarget = plan.categories.reduce((s, c) => s + c.target, 0);
+                                    const liberoSlots = 14 - totalTarget;
+                                    const isOverflow = totalTarget > 14;
+                                    return (
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
                                             <span className="text-xs font-bold text-slate-600">Categorie pasto</span>
@@ -1330,31 +1341,61 @@
                                         {plan.categories.map((cat, catIdx) => (
                                             <div key={cat.id} className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1.5">
                                                 <div className="flex gap-2 items-center">
-                                                    <span className="text-xs font-bold text-slate-400 w-6">{cat.id}</span>
+                                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 rounded px-1.5 py-0.5">{cat.id}</span>
                                                     <input type="text" className="flex-1 text-sm border rounded px-2 py-1 bg-white" placeholder="Nome categoria (es: Carne)" value={cat.label} onChange={(e) => updateCategory(plan.id, cat.id, 'label', e.target.value)} />
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-slate-500">x</span>
-                                                        <input type="number" min="0" max="14" className="w-12 text-center text-sm border rounded py-1 bg-white" value={cat.target} onChange={(e) => updateCategory(plan.id, cat.id, 'target', parseInt(e.target.value) || 0)} />
-                                                        <span className="text-xs text-slate-500">/sett</span>
+                                                    <div className="flex items-center gap-1 bg-white border rounded px-2 py-1">
+                                                        <input type="number" min="0" max="14" className="w-10 text-center text-sm font-bold bg-transparent outline-none" value={cat.target} onChange={(e) => updateCategory(plan.id, cat.id, 'target', parseInt(e.target.value) || 0)} />
+                                                        <span className="text-xs text-slate-500 whitespace-nowrap">volte/sett</span>
                                                     </div>
-                                                    <button onClick={() => removeCategory(plan.id, cat.id)} className="text-xs text-red-400 hover:text-red-600">x</button>
+                                                    <button onClick={() => removeCategory(plan.id, cat.id)} className="text-xs text-red-400 hover:text-red-600 font-bold">x</button>
                                                 </div>
-                                                <input type="text" className="w-full text-xs border rounded px-2 py-1 bg-white text-slate-600" placeholder="Linea guida (es: 200g carne + 200g verdure + 40g riso)" value={cat.guideline} onChange={(e) => updateCategory(plan.id, cat.id, 'guideline', e.target.value)} />
+                                                <input type="text" className="w-full text-xs border rounded px-2 py-1 bg-white text-slate-600" placeholder="Linea guida per porzione (es: 200g carne + 200g verdure + 40g riso)" value={cat.guideline} onChange={(e) => updateCategory(plan.id, cat.id, 'guideline', e.target.value)} />
                                             </div>
                                         ))}
 
-                                        {/* Conflitti */}
+                                        {/* Barra slot usati */}
+                                        {plan.categories.length > 0 && (
+                                            <div className={`rounded-lg p-3 border ${isOverflow ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-200'}`}>
+                                                <div className="flex justify-between items-center mb-1.5">
+                                                    <span className="text-xs font-bold text-slate-600">Slot settimanali</span>
+                                                    <span className={`text-xs font-bold ${isOverflow ? 'text-red-600' : 'text-slate-600'}`}>
+                                                        {totalTarget}/14 usati {!isOverflow && liberoSlots > 0 && `(${liberoSlots} LIBERO)`}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                                                    <div className={`h-full rounded-full transition-all ${isOverflow ? 'bg-red-500' : totalTarget === 14 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                                        style={{ width: `${Math.min(100, (totalTarget / 14) * 100)}%` }} />
+                                                </div>
+                                                {isOverflow && (
+                                                    <div className="flex items-center gap-1.5 mt-2 text-red-600">
+                                                        <Icons.Alert />
+                                                        <span className="text-xs font-bold">Troppi pasti pianificati! Massimo 14 slot/settimana (7 giorni x 2 pasti). Riduci i target per salvare.</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Conflitti giornalieri */}
                                         {plan.categories.length >= 2 && (
-                                            <div>
-                                                <span className="text-xs font-bold text-slate-600 block mb-1">Conflitti giornalieri (non nello stesso giorno)</span>
-                                                <div className="flex flex-wrap gap-1.5">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-slate-600">Conflitti giornalieri</span>
+                                                    <span className="text-[10px] text-slate-400 italic">Due categorie in conflitto non possono comparire nello stesso giorno</span>
+                                                </div>
+                                                <div className="space-y-1.5">
                                                     {plan.categories.map((a, i) =>
                                                         plan.categories.slice(i + 1).map(b => {
                                                             const active = plan.conflicts.some(c => c === `${a.id}:${b.id}` || c === `${b.id}:${a.id}`);
                                                             return (
                                                                 <button key={`${a.id}-${b.id}`} onClick={() => toggleConflict(plan.id, a.id, b.id)}
-                                                                    className={`text-xs px-2 py-1 rounded-full border font-medium transition-all ${active ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-slate-500 border-slate-200 hover:border-red-200'}`}>
-                                                                    {a.label || a.id} + {b.label || b.id}
+                                                                    className={`w-full flex items-center gap-2 text-xs px-3 py-2 rounded-lg border font-medium transition-all text-left ${active ? 'bg-red-50 text-red-700 border-red-300 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                                                                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${active ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300'}`}>
+                                                                        {active && <span className="text-[10px] font-bold">x</span>}
+                                                                    </span>
+                                                                    <span className="font-bold">{a.label || a.id}</span>
+                                                                    <span className="text-slate-400">e</span>
+                                                                    <span className="font-bold">{b.label || b.id}</span>
+                                                                    {active && <span className="ml-auto text-red-500 text-[10px] font-bold uppercase">non nello stesso giorno</span>}
                                                                 </button>
                                                             );
                                                         })
@@ -1363,13 +1404,14 @@
                                             </div>
                                         )}
                                     </div>
-                                )}
+                                    );
+                                })()}
                             </Card>
                         );
                     })}
 
-                    <button onClick={handleSave} className={`w-full text-white text-sm font-bold py-2.5 rounded-lg transition-all ${saved ? 'bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'}`}>
-                        {saved ? 'Salvato!' : 'Salva piani alimentari'}
+                    <button onClick={handleSave} disabled={hasTargetOverflow} className={`w-full text-white text-sm font-bold py-2.5 rounded-lg transition-all ${saved ? 'bg-emerald-500' : hasTargetOverflow ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700'}`}>
+                        {saved ? 'Salvato!' : hasTargetOverflow ? 'Correggi i target per salvare' : 'Salva piani alimentari'}
                     </button>
 
                     <Card className="p-4">
@@ -2701,6 +2743,21 @@
                                 onMarkDone={(slot) => {
                                     if (slot.done) return;
                                     setDeductionModal(slot);
+                                }}
+                                onClearPlan={() => {
+                                    if (confirm('Svuotare il piano di questa settimana? Ricette e dispensa non verranno toccate.')) {
+                                        const DAYS = ['Lunedi', 'Martedi', 'Mercoledi', 'Giovedi', 'Venerdi', 'Sabato', 'Domenica'];
+                                        const MEALS = ['Pranzo', 'Cena'];
+                                        const emptyPlan = [];
+                                        DAYS.forEach(day => {
+                                            MEALS.forEach(meal => {
+                                                emptyPlan.push(createEmptySlot(day, meal, dietPlans));
+                                            });
+                                        });
+                                        const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: emptyPlan };
+                                        setWeeklyPlans(newWeeklyPlans);
+                                        saveToCloud({ weeklyPlans: newWeeklyPlans });
+                                    }
                                 }}
                             />}
                             {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={weekChecked} toggleCheck={toggleCheck} pantryCovered={pantryCovered} />}

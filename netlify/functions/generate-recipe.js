@@ -291,7 +291,7 @@ REGOLE:
 2. Per ogni slot, compila TUTTE le tracks elencate sopra
 3. Non ripetere la stessa ricetta più di 2 volte nella settimana
 4. I target per categoria sono ESATTI: assegna il numero PRECISO di pasti per ogni categoria. Quando tutti i target sono raggiunti, gli slot rimanenti DEVONO avere type "LIBERO" (pasto libero senza vincolo dietetico)
-5. CONFLITTI GIORNALIERI: se due tipi sono in conflitto (indicato sopra), NON assegnarli nello stesso giorno (uno a pranzo e l'altro a cena)
+5. CONFLITTI GIORNALIERI - VINCOLO ASSOLUTO: se due tipi sono in conflitto (indicato sopra), NON possono MAI apparire nello stesso giorno (uno a pranzo e l'altro a cena). Esempio: se Carne(2) e Pesce(4) sono in conflitto, un giorno con tipo "2" a pranzo NON puo avere tipo "4" a cena, e viceversa. Violare questo vincolo e INACCETTABILE
 6. Usa SOLO gli ID delle ricette dal catalogo
 7. Per le track libere (isFreeTrack), assegna type "F" e scegli ricette adatte alla famiglia
 8. Per gli slot "LIBERO" delle track dieta, scegli comunque una ricetta dal catalogo (qualsiasi tipo)
@@ -361,6 +361,27 @@ FORMATO OUTPUT (rispondi SOLO con JSON valido):
                 }
                 return { day: String(entry.day), meal: String(entry.meal), tracks };
             });
+
+            // Auto-fix conflitti giornalieri: se pranzo+cena violano un conflitto, cambia la cena in LIBERO
+            if (dietPlans && dietPlans.length > 0) {
+                for (let i = 0; i < validPlan.length; i += 2) {
+                    const lunch = validPlan[i];
+                    const dinner = validPlan[i + 1];
+                    if (!lunch || !dinner) continue;
+                    dietPlans.forEach(dp => {
+                        if (dp.isFreeTrack || !dp.conflicts || !dp.conflicts.length) return;
+                        const lunchType = lunch.tracks?.[dp.id]?.type;
+                        const dinnerType = dinner.tracks?.[dp.id]?.type;
+                        if (!lunchType || !dinnerType) return;
+                        (dp.conflicts).forEach(conf => {
+                            const [a, b] = conf.split(':');
+                            if ((lunchType === a && dinnerType === b) || (lunchType === b && dinnerType === a)) {
+                                dinner.tracks[dp.id].type = 'LIBERO';
+                            }
+                        });
+                    });
+                }
+            }
 
             return {
                 statusCode: 200, headers,
