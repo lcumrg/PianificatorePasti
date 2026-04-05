@@ -61,7 +61,8 @@
 
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.firestore();
-        const DOC_ID = "famiglia_pasti"; 
+        db.enablePersistence().catch(err => console.warn('Offline persistence non disponibile:', err.code));
+        const DOC_ID = "famiglia_pasti";
 
         const { useState, useMemo, useEffect, useRef } = React;
 
@@ -525,8 +526,8 @@
         // --- COMPONENTE AI RECIPE GENERATOR ---
         const COOKING_METHODS = ['Padella', 'Forno', 'Bollitura', 'Griglia', 'Frittura', 'Friggitrice ad aria', 'Vapore', 'Pentola a pressione', 'Crudo/Insalata', 'Slow cooker'];
 
-        const AIRecipeGenerator = ({ isOpen, onClose, recipes, onAddRecipes, dietPlans, onOpenSettings }) => {
-            const [ingredientsText, setIngredientsText] = useState('');
+        const AIRecipeGenerator = ({ isOpen, onClose, recipes, onAddRecipes, dietPlans, onOpenSettings, initialIngredients }) => {
+            const [ingredientsText, setIngredientsText] = useState(initialIngredients || '');
             const [recipeType, setRecipeType] = useState('');
             const [maxTime, setMaxTime] = useState('');
             const [contextText, setContextText] = useState('');
@@ -535,8 +536,18 @@
             const [generatedRecipes, setGeneratedRecipes] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
+            const [cooldown, setCooldown] = useState(0);
 
-            useEffect(() => { if (!isOpen) { setGeneratedRecipes([]); setError(null); setLoading(false); } }, [isOpen]);
+            useEffect(() => {
+                if (!isOpen) { setGeneratedRecipes([]); setError(null); setLoading(false); }
+                else if (initialIngredients) { setIngredientsText(initialIngredients); }
+            }, [isOpen, initialIngredients]);
+
+            useEffect(() => {
+                if (cooldown <= 0) return;
+                const timer = setTimeout(() => setCooldown(c => c - 1), 1000);
+                return () => clearTimeout(timer);
+            }, [cooldown]);
 
             const toggleMethod = (method) => {
                 setSelectedMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
@@ -568,6 +579,7 @@
                     const data = await resp.json();
                     if (!resp.ok) throw new Error(data.error || 'Errore nella generazione');
                     setGeneratedRecipes(data.recipes || []);
+                    setCooldown(10);
                 } catch (err) {
                     setError(err.message);
                 } finally {
@@ -657,11 +669,13 @@
                         {/* Bottone genera */}
                         <button
                             onClick={handleGenerate}
-                            disabled={loading || !ingredientsText.trim()}
+                            disabled={loading || !ingredientsText.trim() || cooldown > 0}
                             className="w-full bg-violet-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-0.5 transition-all flex items-center justify-center gap-2"
                         >
                             {loading ? (
                                 <><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Generazione in corso...</>
+                            ) : cooldown > 0 ? (
+                                <>Attendi {cooldown}s...</>
                             ) : (
                                 <><Icons.Sparkle /> Genera Ricette</>
                             )}
@@ -749,7 +763,272 @@
             );
         };
 
-        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint }) => {
+        const DAY_NAMES = ['Lunedi', 'Martedi', 'Mercoledi', 'Giovedi', 'Venerdi', 'Sabato', 'Domenica'];
+        const DAY_ACCENTED = { 'lunedi': 'Lunedì', 'martedi': 'Martedì', 'mercoledi': 'Mercoledì', 'giovedi': 'Giovedì', 'venerdi': 'Venerdì', 'sabato': 'Sabato', 'domenica': 'Domenica' };
+
+        const AIWeeklyPlanGenerator = ({ isOpen, onClose, recipes, dietPlans, onApplyPlan, onOpenAIRecipes }) => {
+            const [step, setStep] = useState(0);
+            const [fridgeText, setFridgeText] = useState('');
+            const [contextText, setContextText] = useState('');
+            const [selectedMethods, setSelectedMethods] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [generatedPlan, setGeneratedPlan] = useState(null);
+            const [notCovered, setNotCovered] = useState([]);
+            const [usedIngredients, setUsedIngredients] = useState([]);
+
+            useEffect(() => {
+                if (!isOpen) { setStep(0); setError(null); setLoading(false); setGeneratedPlan(null); setNotCovered([]); setUsedIngredients([]); }
+            }, [isOpen]);
+
+            const toggleMethod = (method) => {
+                setSelectedMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+            };
+
+            const handleGenerate = async () => {
+                setStep(1);
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const resp = await fetch('/.netlify/functions/generate-recipe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            mode: 'weekly_plan',
+                            fridgeIngredients: fridgeText,
+                            recipes: recipes.map(r => ({ id: r.id, type: r.type, name: r.name, ingredients: r.ingredients })),
+                            dietPlans: dietPlans || [],
+                            cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
+                            context: contextText || undefined,
+                        })
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data.error || 'Errore nella generazione');
+
+                    setGeneratedPlan(data.weeklyPlan || []);
+                    setUsedIngredients(data.fridgeIngredientsUsed || []);
+                    const nc = data.fridgeIngredientsNotCovered || [];
+                    setNotCovered(nc);
+                    setStep(nc.length > 0 ? 1.5 : 2);
+                } catch (err) {
+                    setError(err.message);
+                    setStep(0);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const getRecipeName = (recipeId) => {
+                const r = recipes.find(r => r.id === recipeId);
+                return r ? r.name : '—';
+            };
+
+            const isRecipeUsingFridge = (recipeId) => {
+                if (usedIngredients.length === 0) return false;
+                const r = recipes.find(r => r.id === recipeId);
+                if (!r) return false;
+                return r.ingredients.some(ing =>
+                    usedIngredients.some(fi => ing.name.toLowerCase().includes(fi.toLowerCase()) || fi.toLowerCase().includes(ing.name.toLowerCase()))
+                );
+            };
+
+            const handleApply = () => {
+                if (!generatedPlan) return;
+
+                // Build 14-slot plan from AI response
+                const newPlan = [];
+                const dayOrder = ['lunedi', 'martedi', 'mercoledi', 'giovedi', 'venerdi', 'sabato', 'domenica'];
+                const mealOrder = ['pranzo', 'cena'];
+
+                for (const day of dayOrder) {
+                    for (const meal of mealOrder) {
+                        const entry = generatedPlan.find(e =>
+                            e.day.toLowerCase().replace(/[ìèàòù]/g, c => ({ì:'i',è:'e',à:'a',ò:'o',ù:'u'}[c] || c)) === day &&
+                            e.meal.toLowerCase() === meal
+                        );
+
+                        const dayAccented = DAY_ACCENTED[day] || day;
+                        const mealCapitalized = meal === 'pranzo' ? 'Pranzo' : 'Cena';
+
+                        const tracks = {};
+                        dietPlans.forEach(dp => {
+                            const aiTrack = entry?.tracks?.[dp.id];
+                            tracks[dp.id] = {
+                                type: aiTrack?.type || (dp.isFreeTrack ? '' : ''),
+                                recipe: aiTrack?.recipeId || '',
+                                portions: aiTrack?.portions || (dp.isFreeTrack ? 2 : 1)
+                            };
+                        });
+
+                        newPlan.push({ day: dayAccented, meal: mealCapitalized, note: '', tracks });
+                    }
+                }
+
+                const fridgeList = fridgeText.split(',').map(s => s.trim()).filter(Boolean);
+                onApplyPlan(newPlan, fridgeList);
+                onClose();
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Genera Piano Settimanale AI">
+                    <div className="space-y-4">
+
+                        {/* Step 0: Input */}
+                        {step === 0 && (
+                            <>
+                                {recipes.length < 7 && (
+                                    <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-lg text-sm">
+                                        Hai solo {recipes.length} ricette nel database. Per un piano settimanale completo ne servono almeno 7. Considera di aggiungerne altre prima.
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-sm font-bold mb-1">Ingredienti in frigo da smaltire</label>
+                                    <textarea
+                                        className="w-full border rounded-lg p-3 text-sm"
+                                        rows="3"
+                                        placeholder="Es: petto di pollo, zucchine, pomodorini, mozzarella...&#10;(opzionale - le ricette dei primi giorni useranno questi ingredienti)"
+                                        value={fridgeText}
+                                        onChange={(e) => setFridgeText(e.target.value)}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Metodi di cottura preferiti</label>
+                                    <div className="flex flex-wrap gap-1">
+                                        {COOKING_METHODS.map(method => (
+                                            <button key={method} onClick={() => toggleMethod(method)}
+                                                className={`text-xs px-2 py-1 rounded-full border ${selectedMethods.includes(method) ? 'bg-violet-100 border-violet-300 text-violet-700 font-bold' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                                                {method}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Note aggiuntive (opzionale)</label>
+                                    <input type="text" className="w-full border rounded-lg p-2 text-sm" placeholder="Es: questa settimana abbiamo ospiti sabato sera..."
+                                        value={contextText} onChange={(e) => setContextText(e.target.value)} />
+                                </div>
+
+                                {error && <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
+
+                                <button onClick={handleGenerate} disabled={recipes.length < 3}
+                                    className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                    <Icons.Sparkle /> Genera Piano Settimanale
+                                </button>
+                            </>
+                        )}
+
+                        {/* Step 1: Loading */}
+                        {step === 1 && loading && (
+                            <div className="text-center py-8">
+                                <svg className="animate-spin h-8 w-8 mx-auto mb-4 text-emerald-600" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                <p className="text-slate-600 font-bold">Generazione piano in corso...</p>
+                                <p className="text-xs text-slate-400 mt-1">Puo richiedere fino a 30 secondi</p>
+                            </div>
+                        )}
+
+                        {/* Step 1.5: Ingredienti non coperti */}
+                        {step === 1.5 && (
+                            <>
+                                <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                                    <p className="font-bold text-amber-800 mb-2">Alcuni ingredienti del frigo non sono usati da nessuna ricetta:</p>
+                                    <div className="flex flex-wrap gap-1 mb-3">
+                                        {notCovered.map(ing => (
+                                            <span key={ing} className="bg-amber-200 text-amber-900 text-xs px-2 py-1 rounded-full font-bold">{ing}</span>
+                                        ))}
+                                    </div>
+                                    <p className="text-sm text-amber-700">Vuoi creare nuove ricette per smaltire questi ingredienti?</p>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button onClick={() => { onOpenAIRecipes(notCovered.join(', ')); }}
+                                        className="flex-1 bg-violet-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-violet-700">
+                                        Crea Ricette per questi ingredienti
+                                    </button>
+                                    <button onClick={() => setStep(2)}
+                                        className="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm hover:bg-slate-300">
+                                        Continua senza
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Step 2: Anteprima */}
+                        {step === 2 && generatedPlan && (
+                            <>
+                                {usedIngredients.length > 0 && (
+                                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm">
+                                        <span className="font-bold text-emerald-800">Ingredienti frigo usati: </span>
+                                        <span className="text-emerald-700">{usedIngredients.join(', ')}</span>
+                                        <span className="text-emerald-600 text-xs block mt-1">Saranno esclusi dalla lista spesa</span>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                                    {DAY_NAMES.map(day => {
+                                        const dayLower = day.toLowerCase();
+                                        const entries = generatedPlan.filter(e =>
+                                            e.day.toLowerCase().replace(/[ìèàòù]/g, c => ({ì:'i',è:'e',à:'a',ò:'o',ù:'u'}[c] || c)) === dayLower
+                                        );
+                                        const pranzo = entries.find(e => e.meal.toLowerCase() === 'pranzo');
+                                        const cena = entries.find(e => e.meal.toLowerCase() === 'cena');
+
+                                        const getMainRecipeId = (entry) => {
+                                            if (!entry?.tracks) return null;
+                                            const firstTrack = Object.values(entry.tracks)[0];
+                                            return firstTrack?.recipeId;
+                                        };
+
+                                        const pranzoId = getMainRecipeId(pranzo);
+                                        const cenaId = getMainRecipeId(cena);
+
+                                        return (
+                                            <div key={day} className="bg-white border rounded-lg p-3">
+                                                <div className="font-bold text-sm text-slate-700 mb-1">{DAY_ACCENTED[dayLower] || day}</div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-slate-400">P:</span>
+                                                        <span className={`${pranzoId && isRecipeUsingFridge(pranzoId) ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>
+                                                            {pranzoId ? getRecipeName(pranzoId) : '—'}
+                                                        </span>
+                                                        {pranzoId && isRecipeUsingFridge(pranzoId) && <span className="text-emerald-500 text-[10px]">🧊</span>}
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-slate-400">C:</span>
+                                                        <span className={`${cenaId && isRecipeUsingFridge(cenaId) ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>
+                                                            {cenaId ? getRecipeName(cenaId) : '—'}
+                                                        </span>
+                                                        {cenaId && isRecipeUsingFridge(cenaId) && <span className="text-emerald-500 text-[10px]">🧊</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button onClick={handleApply}
+                                        className="flex-1 bg-emerald-600 text-white font-bold py-2 rounded-lg text-sm hover:bg-emerald-700">
+                                        Applica Piano
+                                    </button>
+                                    <button onClick={() => setStep(0)}
+                                        className="bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg text-sm hover:bg-slate-300">
+                                        Indietro
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Modal>
+            );
+        };
+
+        const PlannerView = ({ plan, updatePlan, recipes, dietPlans, currentWeek, changeWeek, resetData, handlePrint, openAIWeeklyModal }) => {
             const weekDates = getDatesOfWeek(currentWeek);
             return (
                 <div className="space-y-6 pb-20">
@@ -760,6 +1039,7 @@
                             <button onClick={() => changeWeek(7)} className="p-2 hover:bg-slate-100 rounded-full" aria-label="Settimana successiva"><Icons.Right /></button>
                         </div>
                         <div className="flex gap-2">
+                            <button onClick={openAIWeeklyModal} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Sparkle /> Piano AI</button>
                             <button onClick={handlePrint} className="bg-slate-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm text-sm font-bold"><Icons.Print /> Stampa</button>
                         </div>
                     </div>
@@ -818,7 +1098,7 @@
             );
         };
 
-        const ShoppingListView = ({ shoppingList, handleCopy, checkedItems, toggleCheck }) => {
+        const ShoppingListView = ({ shoppingList, handleCopy, checkedItems, toggleCheck, fridgeExcluded }) => {
             const grouped = useMemo(() => {
                 const groups = {};
                 shoppingList.forEach(item => {
@@ -835,6 +1115,15 @@
                         <h2 className="text-2xl font-bold text-slate-800">Lista Spesa</h2>
                         <button onClick={handleCopy} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm">Copia Tutto</button>
                     </div>
+                    {fridgeExcluded && fridgeExcluded.length > 0 && (
+                        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm flex items-start gap-2">
+                            <span className="text-lg">🧊</span>
+                            <div>
+                                <span className="font-bold text-emerald-800">Ingredienti in frigo (esclusi dalla spesa): </span>
+                                <span className="text-emerald-700">{fridgeExcluded.join(', ')}</span>
+                            </div>
+                        </div>
+                    )}
                     {shoppingList.length === 0 ? (
                         <div className="bg-white rounded-xl shadow p-8 text-center text-slate-400">Lista vuota.</div>
                     ) : (
@@ -1117,7 +1406,7 @@
 
         // --- SEZIONE SVILUPPO ---
         const SviluppoView = () => {
-            const APP_VERSION = "3.0.0";
+            const APP_VERSION = "3.1.0";
             const LAST_UPDATE = "Aprile 2026";
 
             const features = [
@@ -1135,18 +1424,33 @@
                 { status: 'done', label: 'Accessibilita base', desc: 'ARIA labels, navigazione semantica, focus trap modal, reduced motion' },
                 { status: 'done', label: 'Piani alimentari multipli configurabili', desc: 'Ogni membro della famiglia puo\' avere il proprio piano con categorie, target e conflitti personalizzati' },
                 { status: 'done', label: 'Metodi di cottura preferiti', desc: 'Selezione metodi cottura nel generatore AI per ricette piu\' mirate' },
+                { status: 'done', label: 'AI: piano settimanale automatico', desc: 'Genera un piano completo con ingredienti frigo prioritizzati nei primi giorni ed esclusi dalla spesa' },
+                { status: 'done', label: 'Error Boundary', desc: 'Gestione errori con schermata di recupero invece di schermo bianco' },
+                { status: 'done', label: 'Offline persistence', desc: 'Cache Firestore locale per funzionamento offline' },
+                { status: 'done', label: 'Rate limit AI', desc: 'Cooldown 10 secondi tra le generazioni AI per evitare costi accidentali' },
             ];
 
             const roadmap = [
-                { priority: 'alta', label: 'Autenticazione Firebase', desc: 'Login per proteggere i dati della famiglia con accesso sicuro' },
-                { priority: 'alta', label: 'AI: suggerimento automatico piano completo', desc: 'Genera un intero piano settimanale rispettando vincoli dietetici e preferenze' },
-                { priority: 'media', label: 'Offline mode completo', desc: 'Coda di modifiche offline con sync automatica al ritorno della connessione' },
+                { priority: 'alta', label: 'Autenticazione Firebase', desc: 'Login Google per proteggere i dati della famiglia con accesso sicuro' },
                 { priority: 'media', label: 'Drag & drop piano', desc: 'Riorganizzare i pasti trascinando le ricette tra gli slot' },
                 { priority: 'media', label: 'Storico settimane', desc: 'Visualizzare e confrontare piani delle settimane passate' },
                 { priority: 'media', label: 'AI: categorizzazione automatica ingredienti', desc: 'L\'AI assegna automaticamente la categoria a ingredienti nuovi' },
                 { priority: 'bassa', label: 'Notifiche push', desc: 'Promemoria per la preparazione pasti e la spesa' },
                 { priority: 'bassa', label: 'Multi-famiglia', desc: 'Supporto per piu famiglie/utenti con dati separati' },
                 { priority: 'bassa', label: 'Tema scuro', desc: 'Dark mode per uso serale' },
+            ];
+
+            const costs = [
+                { category: 'AI (Claude API)', items: [
+                    { label: 'Genera 2-3 ricette', detail: '~1500 token in + ~800 token out', cost: '~$0.01' },
+                    { label: 'Piano settimanale completo', detail: '~3000 token in + ~2000 token out', cost: '~$0.025' },
+                    { label: 'Uso familiare tipico', detail: '~4-8 chiamate/settimana', cost: '~$0.50-1.00/mese' },
+                ]},
+                { category: 'Infrastruttura', items: [
+                    { label: 'Netlify (hosting + functions)', detail: 'Free tier: 125k invocazioni/mese', cost: '$0' },
+                    { label: 'Firebase Firestore', detail: 'Free tier: 50k letture + 20k scritture/giorno', cost: '$0' },
+                    { label: 'Dominio', detail: 'Incluso con Netlify (*.netlify.app)', cost: '$0' },
+                ]},
             ];
 
             const statusIcon = { done: '✅', wip: '🔧' };
@@ -1215,6 +1519,31 @@
                         </div>
                     </Card>
 
+                    {/* Analisi Costi */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-3">Analisi Costi</h3>
+                        {costs.map(section => (
+                            <div key={section.category} className="mb-4 last:mb-0">
+                                <h4 className="text-sm font-bold text-slate-600 mb-2">{section.category}</h4>
+                                <div className="space-y-1">
+                                    {section.items.map((item, i) => (
+                                        <div key={i} className="flex justify-between items-center text-xs bg-slate-50 p-2 rounded">
+                                            <div>
+                                                <span className="font-bold text-slate-700">{item.label}</span>
+                                                <span className="text-slate-400 ml-2">{item.detail}</span>
+                                            </div>
+                                            <span className="font-bold text-slate-800 shrink-0 ml-2">{item.cost}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                        <div className="mt-3 bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-center">
+                            <span className="text-sm font-bold text-emerald-800">Costo totale stimato: ~$1-2/mese</span>
+                            <span className="text-xs text-emerald-600 block mt-1">Solo costi API Claude per uso familiare tipico</span>
+                        </div>
+                    </Card>
+
                     <div className="text-center text-xs text-slate-400 space-y-1">
                         <p>Sviluppato con Claude Code (Anthropic)</p>
                         <p>Repo: github.com/lcumrg/PianificatorePasti</p>
@@ -1222,6 +1551,35 @@
                 </div>
             );
         };
+
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+            componentDidCatch(error, info) {
+                console.error('ErrorBoundary caught:', error, info);
+            }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-slate-50 text-center">
+                            <div className="bg-white p-8 rounded-xl shadow-lg max-w-md">
+                                <div className="text-4xl mb-4">⚠️</div>
+                                <h2 className="text-xl font-bold text-slate-800 mb-2">Qualcosa e' andato storto</h2>
+                                <p className="text-sm text-slate-500 mb-4">L'app ha riscontrato un errore imprevisto. I tuoi dati sono al sicuro nel cloud.</p>
+                                <p className="text-xs text-red-400 mb-6 font-mono bg-red-50 p-2 rounded">{this.state.error?.message || 'Errore sconosciuto'}</p>
+                                <button onClick={() => window.location.reload()} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-slate-700">Ricarica App</button>
+                            </div>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
 
         function App() {
             const [activeTab, setActiveTab] = useState('plan');
@@ -1243,6 +1601,9 @@
 
             // --- AI GENERATOR ---
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+            const [isAIWeeklyModalOpen, setIsAIWeeklyModalOpen] = useState(false);
+            const [fridgeIngredients, setFridgeIngredients] = useState({});
+            const [aiRecipePrefilledIngredients, setAiRecipePrefilledIngredients] = useState('');
             const openAIModal = () => setIsAIModalOpen(true);
 
             // Aggiorna variabili globali derivate quando dietPlans cambia
@@ -1275,7 +1636,7 @@
                 }
                 pendingDataRef.current = null;
                 setSyncStatus('sync');
-                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, lastUpdate: new Date().toISOString(), ...dataToUpdate };
+                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, lastUpdate: new Date().toISOString(), ...dataToUpdate };
                 db.collection('app_pasti').doc(DOC_ID).set(fullData)
                     .then(() => setTimeout(() => setSyncStatus('saved'), 500))
                     .catch((err) => { console.error(err); setSyncStatus('error'); });
@@ -1298,7 +1659,7 @@
             useEffect(() => {
                 const handleBeforeUnload = () => {
                     if (pendingDataRef.current && db) {
-                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
+                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
                         navigator.sendBeacon && db.collection('app_pasti').doc(DOC_ID).set(fullData);
                     }
                 };
@@ -1357,6 +1718,10 @@
                                 const { migrated } = migratePlanToIds(data.plan, loadedRecipes);
                                 const trackMigrated = migrated.map(slot => migrateSlotToTracks(slot, loadedDietPlans));
                                 setWeeklyPlans({ [currentWeekKey]: trackMigrated });
+                            }
+
+                            if (data.fridgeIngredients) {
+                                setFridgeIngredients(data.fridgeIngredients);
                             }
 
                             if (data.lastUpdate) {
@@ -1630,6 +1995,9 @@
                 window.print();
             };
 
+            const currentFridgeList = fridgeIngredients[currentWeekKey] || [];
+            const fridgeListLower = currentFridgeList.map(n => n.toLowerCase().trim());
+
             const shoppingList = useMemo(() => {
                 const list = {};
                 plan.forEach(slot => {
@@ -1638,6 +2006,8 @@
                         const rec = getRecipeById(track.recipe, recipes);
                         if (rec) {
                             rec.ingredients.forEach(ing => {
+                                const ingLower = ing.name.toLowerCase();
+                                if (fridgeListLower.some(fi => ingLower.includes(fi) || fi.includes(ingLower))) return;
                                 const key = `${ing.name} (${ing.unit})`;
                                 if (!list[key]) list[key] = { name: ing.name, unit: ing.unit, qty: 0 };
                                 list[key].qty += ing.qty * (track.portions || 0);
@@ -1646,7 +2016,7 @@
                     });
                 });
                 return Object.values(list).sort((a, b) => a.name.localeCompare(b.name));
-            }, [plan, recipes]);
+            }, [plan, recipes, fridgeListLower]);
 
             const handleCopy = () => {
                 const text = shoppingList.map(item => `- ${item.name}: ${item.qty} ${item.unit}`).join('\n');
@@ -1706,8 +2076,9 @@
                                 changeWeek={changeWeek}
                                 resetData={resetData}
                                 handlePrint={handlePrint}
+                                openAIWeeklyModal={() => setIsAIWeeklyModalOpen(true)}
                             />}
-                            {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={weekChecked} toggleCheck={toggleCheck} />}
+                            {activeTab === 'shop' && <ShoppingListView shoppingList={shoppingList} handleCopy={handleCopy} checkedItems={weekChecked} toggleCheck={toggleCheck} fridgeExcluded={currentFridgeList} />}
                             {activeTab === 'recipes' &&
                                 <RecipesView
                                     recipes={recipes}
@@ -1732,18 +2103,40 @@
 
                     <AIRecipeGenerator
                         isOpen={isAIModalOpen}
-                        onClose={() => setIsAIModalOpen(false)}
+                        onClose={() => { setIsAIModalOpen(false); setAiRecipePrefilledIngredients(''); }}
                         recipes={recipes}
                         onAddRecipes={addGeneratedRecipes}
                         dietPlans={dietPlans}
                         onOpenSettings={() => setActiveTab('settings')}
+                        initialIngredients={aiRecipePrefilledIngredients}
+                    />
+
+                    <AIWeeklyPlanGenerator
+                        isOpen={isAIWeeklyModalOpen}
+                        onClose={() => setIsAIWeeklyModalOpen(false)}
+                        recipes={recipes}
+                        dietPlans={dietPlans}
+                        onApplyPlan={(newPlan, fridgeList) => {
+                            const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: newPlan };
+                            setWeeklyPlans(newWeeklyPlans);
+                            const newFridge = fridgeList.length > 0
+                                ? { ...fridgeIngredients, [currentWeekKey]: fridgeList }
+                                : fridgeIngredients;
+                            setFridgeIngredients(newFridge);
+                            saveToCloud({ weeklyPlans: newWeeklyPlans, fridgeIngredients: newFridge });
+                        }}
+                        onOpenAIRecipes={(ingredients) => {
+                            setAiRecipePrefilledIngredients(ingredients);
+                            setIsAIWeeklyModalOpen(false);
+                            setIsAIModalOpen(true);
+                        }}
                     />
                 </div>
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(<ErrorBoundary><App /></ErrorBoundary>);
     </script>
     <script>
         if ('serviceWorker' in navigator) {

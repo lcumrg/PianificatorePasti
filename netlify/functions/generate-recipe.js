@@ -115,6 +115,142 @@ exports.handler = async (event) => {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Body JSON non valido' }) };
     }
 
+    const { mode } = body;
+
+    // ==================== MODO: WEEKLY PLAN ====================
+    if (mode === 'weekly_plan') {
+        const { fridgeIngredients, recipes: recipeList, dietPlans, cookingMethods, context } = body;
+
+        if (!recipeList || recipeList.length === 0) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessuna ricetta nel database. Aggiungi delle ricette prima di generare un piano.' }) };
+        }
+
+        const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods);
+
+        // Build recipe catalog for AI
+        const recipeCatalog = recipeList.map(r => {
+            const ings = r.ingredients.map(i => i.name).join(', ');
+            return `ID:${r.id} | Tipo:${r.type} | "${r.name}" | Ingredienti: ${ings}`;
+        }).join('\n');
+
+        // Build diet plan track info
+        let tracksInfo = '';
+        if (dietPlans && dietPlans.length > 0) {
+            tracksInfo = dietPlans.map(dp => {
+                if (dp.isFreeTrack) return `- Track "${dp.id}" ("${dp.name}"): piano libero, usa tipo "F", portions: 2`;
+                const cats = dp.categories.map(c => `${c.label}(${c.id}) ${c.target}x/sett`).join(', ');
+                return `- Track "${dp.id}" ("${dp.name}"): ${cats}, portions: 1`;
+            }).join('\n');
+        }
+
+        const fridgeNote = fridgeIngredients && fridgeIngredients.trim()
+            ? `\nINGREDIENTI IN FRIGO DA SMALTIRE: ${fridgeIngredients}\nUSA QUESTI INGREDIENTI nei primi 2-3 giorni della settimana, scegliendo ricette che li contengono.\nSe nessuna ricetta esistente usa uno di questi ingredienti, elencalo in "fridgeIngredientsNotCovered".`
+            : '';
+
+        const contextNote = context ? `\nNote aggiuntive: ${context}` : '';
+
+        const userPrompt = `Genera un piano pasti settimanale completo usando SOLO le ricette dal catalogo sotto.
+
+CATALOGO RICETTE DISPONIBILI:
+${recipeCatalog}
+
+TRACKS (piani alimentari) da compilare per ogni pasto:
+${tracksInfo}
+${fridgeNote}${contextNote}
+
+REGOLE:
+1. Assegna una ricetta a OGNI slot (7 giorni x pranzo e cena = 14 slot)
+2. Per ogni slot, compila TUTTE le tracks elencate sopra
+3. Non ripetere la stessa ricetta più di 2 volte nella settimana
+4. Rispetta i target settimanali per categoria di ogni track
+5. Rispetta i conflitti (non assegnare tipi in conflitto nello stesso giorno)
+6. Usa SOLO gli ID delle ricette dal catalogo
+7. Per le track libere (isFreeTrack), assegna type "F" e scegli ricette adatte alla famiglia
+
+GIORNI: Lunedi, Martedi, Mercoledi, Giovedi, Venerdi, Sabato, Domenica
+PASTI: Pranzo, Cena
+
+FORMATO OUTPUT (rispondi SOLO con JSON valido):
+{
+  "weeklyPlan": [
+    { "day": "Lunedi", "meal": "Pranzo", "tracks": { "track_id": { "type": "2", "recipeId": 123, "portions": 1 } } },
+    { "day": "Lunedi", "meal": "Cena", "tracks": { "track_id": { "type": "3", "recipeId": 456, "portions": 1 } } }
+  ],
+  "fridgeIngredientsUsed": ["ingrediente1", "ingrediente2"],
+  "fridgeIngredientsNotCovered": ["ingrediente3"]
+}`;
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: userPrompt }]
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error('Claude API error:', response.status, errText);
+                if (response.status === 429) {
+                    return { statusCode: 429, headers, body: JSON.stringify({ error: 'Troppe richieste. Riprova tra qualche secondo.' }) };
+                }
+                return { statusCode: 502, headers, body: JSON.stringify({ error: 'Errore nella comunicazione con Claude API' }) };
+            }
+
+            const data = await response.json();
+            const content = data.content[0].text;
+
+            let jsonStr = content;
+            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (jsonMatch) jsonStr = jsonMatch[1];
+
+            const parsed = JSON.parse(jsonStr.trim());
+
+            if (!parsed.weeklyPlan || !Array.isArray(parsed.weeklyPlan)) {
+                return { statusCode: 502, headers, body: JSON.stringify({ error: 'Risposta AI non nel formato atteso per il piano settimanale' }) };
+            }
+
+            // Validate recipe IDs exist
+            const validIds = new Set(recipeList.map(r => r.id));
+            const validPlan = parsed.weeklyPlan.map(entry => {
+                const tracks = {};
+                if (entry.tracks) {
+                    Object.entries(entry.tracks).forEach(([trackId, track]) => {
+                        const rid = Number(track.recipeId);
+                        tracks[trackId] = {
+                            type: String(track.type || ''),
+                            recipeId: validIds.has(rid) ? rid : null,
+                            portions: Number(track.portions) || 1
+                        };
+                    });
+                }
+                return { day: String(entry.day), meal: String(entry.meal), tracks };
+            });
+
+            return {
+                statusCode: 200, headers,
+                body: JSON.stringify({
+                    weeklyPlan: validPlan,
+                    fridgeIngredientsUsed: parsed.fridgeIngredientsUsed || [],
+                    fridgeIngredientsNotCovered: parsed.fridgeIngredientsNotCovered || []
+                })
+            };
+
+        } catch (err) {
+            console.error('Function error (weekly_plan):', err);
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Errore interno nella generazione del piano settimanale' }) };
+        }
+    }
+
+    // ==================== MODO: FROM INGREDIENTS (default) ====================
     const { ingredients, dietPlans, targetPlan, cookingMethods, context } = body;
     const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods);
 
