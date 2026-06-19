@@ -1,7 +1,7 @@
 // Netlify Function: Proxy per Claude API - Generazione Ricette Personalizzate
 // La ANTHROPIC_API_KEY è impostata come env var su Netlify
 
-const buildSystemPrompt = (dietPlans, cookingMethods) => {
+const buildSystemPrompt = (dietPlans, cookingMethods, tasteProfile) => {
     // Genera regole dietetiche dinamicamente dai piani configurati
     const allCategories = [];
     const typeLabels = {};
@@ -56,6 +56,18 @@ UNITÀ: "g", "ml", "pz", "qb"`;
 
     if (cookingMethods && cookingMethods.length > 0) {
         prompt += `\n\nMETODI DI COTTURA PREFERITI: ${cookingMethods.join(', ')}. Usa principalmente questi metodi di cottura.`;
+    }
+
+    if (tasteProfile) {
+        const tp = tasteProfile;
+        const parts = [];
+        if (tp.liked && String(tp.liked).trim()) parts.push(`Ingredienti/piatti preferiti: ${String(tp.liked).trim()}`);
+        if (tp.avoid && String(tp.avoid).trim()) parts.push(`Da EVITARE assolutamente (non usare mai): ${String(tp.avoid).trim()}`);
+        if (tp.cuisines && String(tp.cuisines).trim()) parts.push(`Cucine/stili preferiti: ${String(tp.cuisines).trim()}`);
+        if (tp.notes && String(tp.notes).trim()) parts.push(`Note: ${String(tp.notes).trim()}`);
+        if (parts.length > 0) {
+            prompt += `\n\nPROFILO GUSTI DELL'UTENTE (rispettalo SEMPRE, in particolare le cose da evitare):\n- ${parts.join('\n- ')}`;
+        }
     }
 
     prompt += `
@@ -223,13 +235,13 @@ FORMATO OUTPUT (rispondi SOLO con JSON valido):
 
     // ==================== MODO: WEEKLY PLAN ====================
     if (mode === 'weekly_plan') {
-        const { pantry: pantryData, fridgeIngredients, recipes: recipeList, dietPlans, cookingMethods, context } = body;
+        const { pantry: pantryData, fridgeIngredients, recipes: recipeList, dietPlans, cookingMethods, context, tasteProfile } = body;
 
         if (!recipeList || recipeList.length === 0) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessuna ricetta nel database. Aggiungi delle ricette prima di generare un piano.' }) };
         }
 
-        const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods);
+        const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods, tasteProfile);
 
         // Build recipe catalog for AI
         const recipeCatalog = recipeList.map(r => {
@@ -397,12 +409,10 @@ FORMATO OUTPUT (rispondi SOLO con JSON valido):
     }
 
     // ==================== MODO: FROM INGREDIENTS (default) ====================
-    const { ingredients, dietPlans, targetPlan, cookingMethods, context } = body;
-    const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods);
+    const { ingredients, dietPlans, targetPlan, cookingMethods, context, tasteProfile } = body;
+    const systemPrompt = buildSystemPrompt(dietPlans, cookingMethods, tasteProfile);
 
-    if (!ingredients || ingredients.trim().length === 0) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Inserisci almeno un ingrediente' }) };
-    }
+    const hasIngredients = ingredients && ingredients.trim().length > 0;
 
     const contextNote = context ? `\nContesto di oggi: ${context}` : '';
     const typeHint = body.recipeType ? `\nTipo ricetta richiesto: ${body.recipeType} (rispetta le grammature per questo tipo)` : '';
@@ -418,9 +428,16 @@ FORMATO OUTPUT (rispondi SOLO con JSON valido):
         }
     }
 
-    const userPrompt = `Ho questi ingredienti disponibili: ${ingredients}
+    const ingredientsLine = hasIngredients
+        ? `Ho questi ingredienti disponibili: ${ingredients}`
+        : `Genera ricette in base al piano alimentare e ai gusti dell'utente (nessun ingrediente specifico richiesto).`;
+    const generationLine = hasIngredients
+        ? `Genera 2-3 ricette usando principalmente questi ingredienti. Puoi aggiungere solo condimenti base (olio, sale, spezie) se mancano.`
+        : `Genera 2-3 ricette adatte ai gusti dell'utente e al piano alimentare indicato, variando gli ingredienti.`;
+
+    const userPrompt = `${ingredientsLine}
 ${typeHint}${timeHint}${planHint}${contextNote}
-Genera 2-3 ricette usando principalmente questi ingredienti. Puoi aggiungere solo condimenti base (olio, sale, spezie) se mancano. Ogni ricetta deve avere un tipo (1-4 o F) e rispettare le grammature dietetiche.
+${generationLine} Ogni ricetta deve avere un tipo (1-4 o F) e rispettare le grammature dietetiche.
 Includi un "tip" pratico per ogni ricetta (es. "si può preparare la sera prima", "i bambini lo adorano con un filo di parmigiano").`;
 
     try {

@@ -65,6 +65,9 @@
         db.enablePersistence().catch(err => console.warn('Offline persistence non disponibile:', err.code));
         const DOC_ID = "famiglia_pasti";
 
+        // Interruttore modulo Dispensa: false = nascosto (codice e dati conservati, riattivabile mettendo true)
+        const PANTRY_ENABLED = false;
+
         const { useState, useMemo, useEffect, useRef } = React;
 
         // --- ICONE ---
@@ -541,7 +544,7 @@
         // --- COMPONENTE AI RECIPE GENERATOR ---
         const COOKING_METHODS = ['Padella', 'Forno', 'Bollitura', 'Griglia', 'Frittura', 'Friggitrice ad aria', 'Vapore', 'Pentola a pressione', 'Crudo/Insalata', 'Slow cooker'];
 
-        const AIRecipeGenerator = ({ isOpen, onClose, recipes, onAddRecipes, dietPlans, onOpenSettings, initialIngredients }) => {
+        const AIRecipeGenerator = ({ isOpen, onClose, recipes, onAddRecipes, dietPlans, tasteProfile, onOpenSettings, initialIngredients }) => {
             const [ingredientsText, setIngredientsText] = useState(initialIngredients || '');
             const [recipeType, setRecipeType] = useState('');
             const [maxTime, setMaxTime] = useState('');
@@ -578,6 +581,7 @@
                     mode: 'from_ingredients',
                     dietPlans: dietPlans || [],
                     targetPlan: targetPlan || undefined,
+                    tasteProfile: tasteProfile || undefined,
                     cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
                     context: contextText || undefined,
                     ingredients: ingredientsText,
@@ -646,11 +650,11 @@
                         {/* Ingredienti */}
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-sm font-bold mb-1">Cosa hai in casa?</label>
+                                <label className="block text-sm font-bold mb-1">Ingredienti da usare (facoltativo)</label>
                                 <textarea
                                     className="w-full border rounded-lg p-3 text-sm"
                                     rows="2"
-                                    placeholder="Es: petto di pollo, zucchine, riso, pomodorini, parmigiano..."
+                                    placeholder="Lascia vuoto per ricette basate sui tuoi gusti e sul piano. Oppure: petto di pollo, zucchine, riso..."
                                     value={ingredientsText}
                                     onChange={(e) => setIngredientsText(e.target.value)}
                                 />
@@ -684,7 +688,7 @@
                         {/* Bottone genera */}
                         <button
                             onClick={handleGenerate}
-                            disabled={loading || !ingredientsText.trim() || cooldown > 0}
+                            disabled={loading || cooldown > 0}
                             className="w-full bg-violet-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-0.5 transition-all flex items-center justify-center gap-2"
                         >
                             {loading ? (
@@ -781,7 +785,7 @@
         const DAY_NAMES = ['Lunedi', 'Martedi', 'Mercoledi', 'Giovedi', 'Venerdi', 'Sabato', 'Domenica'];
         const DAY_ACCENTED = { 'lunedi': 'Lunedì', 'martedi': 'Martedì', 'mercoledi': 'Mercoledì', 'giovedi': 'Giovedì', 'venerdi': 'Venerdì', 'sabato': 'Sabato', 'domenica': 'Domenica' };
 
-        const AIWeeklyPlanGenerator = ({ isOpen, onClose, recipes, dietPlans, onApplyPlan, pantry }) => {
+        const AIWeeklyPlanGenerator = ({ isOpen, onClose, recipes, dietPlans, tasteProfile, onApplyPlan, pantry }) => {
             const [step, setStep] = useState(0);
             const [contextText, setContextText] = useState('');
             const [selectedMethods, setSelectedMethods] = useState([]);
@@ -808,9 +812,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             mode: 'weekly_plan',
-                            pantry: pantry.map(p => ({ name: p.name, qty: p.qty, unit: p.unit, container: p.container })),
+                            pantry: PANTRY_ENABLED ? pantry.map(p => ({ name: p.name, qty: p.qty, unit: p.unit, container: p.container })) : undefined,
                             recipes: recipes.map(r => ({ id: r.id, type: r.type, name: r.name, ingredients: r.ingredients })),
                             dietPlans: dietPlans || [],
+                            tasteProfile: tasteProfile || undefined,
                             cookingMethods: selectedMethods.length > 0 ? selectedMethods : undefined,
                             context: contextText || undefined,
                         })
@@ -884,7 +889,7 @@
                                     </div>
                                 )}
 
-                                {pantry.length > 0 ? (
+                                {PANTRY_ENABLED && (pantry.length > 0 ? (
                                     <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-sm">
                                         <span className="font-bold text-emerald-800">L'AI terra conto della tua dispensa ({pantry.length} prodotti)</span>
                                         <div className="text-emerald-700 text-xs mt-1">
@@ -898,7 +903,11 @@
                                     <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm text-slate-500">
                                         Dispensa vuota. L'AI generera il piano senza tenere conto di prodotti gia disponibili.
                                     </div>
-                                )}
+                                ))}
+
+                                <div className="bg-violet-50 border border-violet-200 p-3 rounded-lg text-sm text-violet-800">
+                                    L'AI compilera la settimana rispettando il piano alimentare e i tuoi gusti (configurabili in <strong>Famiglia</strong>).
+                                </div>
 
                                 <div>
                                     <label className="block text-xs font-bold text-slate-600 mb-1">Metodi di cottura preferiti</label>
@@ -1036,7 +1045,7 @@
                                             <div className="flex flex-col gap-2">
                                                 <div className="bg-slate-50 p-2 rounded flex justify-between items-center">
                                                     <span className="font-bold text-sm text-slate-600">PRANZO</span>
-                                                    {lunch.tracks && Object.values(lunch.tracks).some(t => t.recipe) && (
+                                                    {PANTRY_ENABLED && lunch.tracks && Object.values(lunch.tracks).some(t => t.recipe) && (
                                                         <button onClick={() => onMarkDone(lunch)}
                                                             className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${lunch.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'}`}
                                                             title="Segna come fatto e scarica dalla dispensa">
@@ -1056,7 +1065,7 @@
                                             <div className="flex flex-col gap-2">
                                                 <div className="bg-slate-50 p-2 rounded flex justify-between items-center">
                                                     <span className="font-bold text-sm text-slate-600">CENA</span>
-                                                    {dinner.tracks && Object.values(dinner.tracks).some(t => t.recipe) && (
+                                                    {PANTRY_ENABLED && dinner.tracks && Object.values(dinner.tracks).some(t => t.recipe) && (
                                                         <button onClick={() => onMarkDone(dinner)}
                                                             className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${dinner.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'}`}
                                                             title="Segna come fatto e scarica dalla dispensa">
@@ -1136,43 +1145,19 @@
             );
         };
 
-        const RecipesView = ({ recipes, deleteRecipe, onAddRecipe, onEditRecipe, onImportRecipes, openAIModal }) => {
+        const RecipesView = ({ recipes, deleteRecipe, onAddRecipe, onEditRecipe, openAIModal }) => {
             const [filter, setFilter] = useState('ALL');
-            const fileInputRef = useRef(null); // Ref for file input
 
             const filteredRecipes = useMemo(() => {
                 if (filter === 'ALL') return recipes;
                 return recipes.filter(r => r.type === filter);
             }, [recipes, filter]);
 
-            const handleImportClick = () => {
-                fileInputRef.current.click();
-            };
-
-            const handleFileChange = (e) => {
-                onImportRecipes(e);
-            };
-
             return (
                 <div className="space-y-6 pb-20">
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-slate-800">Database</h2>
                         <div className="flex gap-2">
-                            {/* Import Button */}
-                            <input 
-                                type="file" 
-                                accept=".csv" 
-                                ref={fileInputRef} 
-                                style={{display: 'none'}} 
-                                onChange={handleFileChange} 
-                            />
-                            <button onClick={handleImportClick} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-300 flex items-center gap-2">
-                                <Icons.Upload /> <span className="hidden md:inline">Importa</span>
-                            </button>
-
-                            <button onClick={() => exportRecipesCSV()} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-slate-300 flex items-center gap-2">
-                                <Icons.Download /> <span className="hidden md:inline">Esporta</span>
-                            </button>
                             <button onClick={() => openAIModal()} className="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-violet-700 flex items-center gap-1"><Icons.Sparkle /> <span className="hidden md:inline">AI</span></button>
                             <button onClick={onAddRecipe} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-emerald-700">+ Nuova</button>
                         </div>
@@ -1218,10 +1203,17 @@
         // --- APP PRINCIPALE ---
 
         // --- SEZIONE PIANI ALIMENTARI ---
-        const SettingsView = ({ dietPlans, onSavePlans, resetData }) => {
+        const SettingsView = ({ dietPlans, onSavePlans, resetData, tasteProfile, onSaveTaste }) => {
             const [localPlans, setLocalPlans] = useState(dietPlans);
             const [saved, setSaved] = useState(false);
             useEffect(() => { setLocalPlans(dietPlans); }, [dietPlans]);
+
+            // --- Profilo gusti ---
+            const [localTaste, setLocalTaste] = useState(tasteProfile || { liked: '', avoid: '', cuisines: '', notes: '' });
+            const [tasteSaved, setTasteSaved] = useState(false);
+            useEffect(() => { setLocalTaste(tasteProfile || { liked: '', avoid: '', cuisines: '', notes: '' }); }, [tasteProfile]);
+            const updateTaste = (field, value) => { setLocalTaste(prev => ({ ...prev, [field]: value })); setTasteSaved(false); };
+            const handleSaveTaste = () => { onSaveTaste(localTaste); setTasteSaved(true); setTimeout(() => setTasteSaved(false), 2000); };
 
             const updatePlan = (planId, updates) => {
                 setLocalPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updates } : p));
@@ -1296,6 +1288,33 @@
 
             return (
                 <div className="space-y-4 pb-20">
+                    {/* I tuoi gusti */}
+                    <Card className="p-4">
+                        <h3 className="font-bold text-slate-800 mb-1">I tuoi gusti</h3>
+                        <p className="text-xs text-slate-500 mb-3">L'AI usa questi gusti per generare ricette e piani settimanali su misura per te.</p>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">✅ Ingredienti / piatti preferiti</label>
+                                <textarea rows="2" className="w-full border rounded-lg p-2 text-sm" placeholder="Es: pollo, zucchine, pasta, salmone, curry..." value={localTaste.liked || ''} onChange={(e) => updateTaste('liked', e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">🚫 Da evitare (non graditi / allergie)</label>
+                                <textarea rows="2" className="w-full border rounded-lg p-2 text-sm" placeholder="Es: niente funghi, no piccante, allergia alle noci..." value={localTaste.avoid || ''} onChange={(e) => updateTaste('avoid', e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">🍴 Cucine / stili preferiti</label>
+                                <input type="text" className="w-full border rounded-lg p-2 text-sm" placeholder="Es: mediterranea, asiatica, comfort food..." value={localTaste.cuisines || ''} onChange={(e) => updateTaste('cuisines', e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">📝 Note libere</label>
+                                <input type="text" className="w-full border rounded-lg p-2 text-sm" placeholder="Es: veloce in settimana, porzioni abbondanti..." value={localTaste.notes || ''} onChange={(e) => updateTaste('notes', e.target.value)} />
+                            </div>
+                            <button onClick={handleSaveTaste} className={`w-full text-white text-sm font-bold py-2.5 rounded-lg transition-all ${tasteSaved ? 'bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'}`}>
+                                {tasteSaved ? 'Salvato!' : 'Salva i tuoi gusti'}
+                            </button>
+                        </div>
+                    </Card>
+
                     <div className="flex justify-between items-center">
                         <h2 className="text-lg font-bold text-slate-800">Piani alimentari</h2>
                         <button onClick={addPlan} className="text-xs bg-slate-800 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 font-bold">+ Aggiungi piano</button>
@@ -1913,8 +1932,8 @@
 
         // --- SEZIONE SVILUPPO ---
         const SviluppoView = () => {
-            const APP_VERSION = "4.0.0";
-            const LAST_UPDATE = "Aprile 2026";
+            const APP_VERSION = "5.0.0";
+            const LAST_UPDATE = "Giugno 2026";
 
             const features = [
                 { status: 'done', label: 'Pianificazione settimanale pranzo/cena', desc: 'Piano per 7 giorni con doppio binario dieta + famiglia' },
@@ -1980,14 +1999,14 @@
                     <Card className="p-4">
                         <h3 className="font-bold text-slate-800 mb-2">Il Progetto</h3>
                         <p className="text-sm text-slate-600 leading-relaxed">
-                            Un'app pensata per famiglie che vogliono seguire un piano alimentare sano senza impazzire nell'organizzazione.
-                            L'obiettivo e rendere <strong>pratico e veloce</strong> pianificare i pasti settimanali, gestire la dispensa,
-                            ottimizzare la spesa e adattare le routine alimentari familiari con il supporto dell'intelligenza artificiale.
+                            App focalizzata su <strong>tre cose</strong>: pianificare la settimana di pasti,
+                            generare con l'AI ricette su misura per i propri gusti e in linea col piano alimentare,
+                            e produrre automaticamente la lista della spesa settimanale.
                         </p>
                         <p className="text-sm text-slate-600 leading-relaxed mt-2">
-                            Ideale per <strong>famiglie numerose</strong> dove il tempo e prezioso: doppio binario dieta personale + famiglia,
-                            gestione dispensa con 3 contenitori (Dispensa, Frigo, Freezer), inserimento prodotti da foto scontrino,
-                            lista spesa intelligente che sottrae il disponibile, e generazione ricette AI che tiene conto di tutto.
+                            L'AI tiene conto del tuo <strong>Profilo Gusti</strong> (preferenze, cose da evitare, cucine, note)
+                            e del piano alimentare configurato, sia per le singole ricette sia per la compilazione dell'intera settimana.
+                            Il modulo Dispensa e attualmente disattivato (codice e dati conservati, riattivabile).
                         </p>
                     </Card>
 
@@ -2104,6 +2123,7 @@
             const [recipes, setRecipes] = useState(DEFAULT_RECIPES);
             const [checkedItems, setCheckedItems] = useState({});
             const [dietPlans, setDietPlans] = useState(DEFAULT_DIET_PLANS);
+            const [tasteProfile, setTasteProfile] = useState({ liked: '', avoid: '', cuisines: '', notes: '' });
 
             const [currentWeekStart, setCurrentWeekStart] = useState(getMonday(new Date()));
             const [weeklyPlans, setWeeklyPlans] = useState({});
@@ -2221,6 +2241,11 @@
                 saveToCloud({ dietPlans: plans });
             };
 
+            const saveTasteProfile = (tp) => {
+                setTasteProfile(tp);
+                saveToCloud({ tasteProfile: tp });
+            };
+
             const addGeneratedRecipes = (newRecipes) => {
                 const updated = [...recipes, ...newRecipes.map(r => ({ ...r, id: Date.now() + Math.random() }))];
                 setRecipes(updated);
@@ -2239,7 +2264,7 @@
                 }
                 pendingDataRef.current = null;
                 setSyncStatus('sync');
-                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, pantry, customCategories, lastUpdate: new Date().toISOString(), ...dataToUpdate };
+                const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, tasteProfile, fridgeIngredients, pantry, customCategories, lastUpdate: new Date().toISOString(), ...dataToUpdate };
                 db.collection('app_pasti').doc(DOC_ID).set(fullData)
                     .then(() => setTimeout(() => setSyncStatus('saved'), 500))
                     .catch((err) => { console.error(err); setSyncStatus('error'); });
@@ -2262,7 +2287,7 @@
             useEffect(() => {
                 const handleBeforeUnload = () => {
                     if (pendingDataRef.current && db) {
-                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, fridgeIngredients, pantry, customCategories, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
+                        const fullData = { recipes, checkedItems, weeklyPlans, dietPlans, tasteProfile, fridgeIngredients, pantry, customCategories, lastUpdate: new Date().toISOString(), ...pendingDataRef.current };
                         navigator.sendBeacon && db.collection('app_pasti').doc(DOC_ID).set(fullData);
                     }
                 };
@@ -2332,6 +2357,9 @@
                             }
                             if (data.customCategories) {
                                 setCustomCategories(data.customCategories);
+                            }
+                            if (data.tasteProfile) {
+                                setTasteProfile(data.tasteProfile);
                             }
 
                             if (data.lastUpdate) {
@@ -2428,131 +2456,6 @@
                 }
             };
 
-            // Funzione Esportazione CSV
-            window.exportRecipesCSV = () => {
-                const headers = ["ID", "Tipo", "Nome", "Ingredienti"];
-                const rows = recipes.map(r => {
-                    const ingStr = r.ingredients.map(i => `${i.name} ${i.qty}${i.unit}`).join('; ');
-                    const safeName = `"${r.name.replace(/"/g, '""')}"`;
-                    const safeIng = `"${ingStr.replace(/"/g, '""')}"`;
-                    return [r.id, r.type, safeName, safeIng].join(',');
-                });
-                const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `ricette_backup_${new Date().toISOString().slice(0,10)}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            // Funzione Importazione CSV
-            const handleImportRecipes = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                if (!confirm("ATTENZIONE: L'importazione sovrascriverà le ricette attuali con quelle del file CSV. Vuoi continuare?")) {
-                    e.target.value = null; // Reset input
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const csvText = event.target.result;
-                        const lines = csvText.split('\n').filter(l => l.trim() !== '');
-                        const newRecipes = [];
-
-                        // Skip header (row 0)
-                        for (let i = 1; i < lines.length; i++) {
-                            const line = lines[i];
-                            // Regex robusta per CSV che gestisce le virgole dentro le virgolette
-                            const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-                            
-                            // Ci aspettiamo almeno 4 colonne: ID, Tipo, Nome, Ingredienti
-                            // Nota: la regex sopra potrebbe non catturare campi vuoti correttamente in tutti i casi edge, 
-                            // ma funziona per il formato export generato.
-                            // Un approccio più semplice per il nostro formato specifico:
-                            // ID e Tipo sono numeri/semplici. Nome e Ingredienti sono virgolettati.
-                            
-                            // Usiamo una logica di split più manuale per sicurezza sui dati generati
-                            // ID,Tipo,"Nome","Ing..."
-                            const firstComma = line.indexOf(',');
-                            const secondComma = line.indexOf(',', firstComma + 1);
-                            const firstQuote = line.indexOf('"');
-                            
-                            if (firstComma === -1 || secondComma === -1) continue;
-
-                            const id = parseInt(line.substring(0, firstComma));
-                            const type = line.substring(firstComma + 1, secondComma);
-                            
-                            // Parsare Nome e Ingredienti (assumendo siano tra virgolette)
-                            // Trova la parte dopo il secondo comma
-                            const rest = line.substring(secondComma + 1).trim();
-                            // Regex per estrarre due stringhe tra virgolette separate da virgola
-                            const parts = rest.match(/"([^"]*)"\s*,\s*"([^"]*)"/);
-                            
-                            let name = "";
-                            let ingStr = "";
-
-                            if (parts && parts.length >= 3) {
-                                name = parts[1].replace(/""/g, '"');
-                                ingStr = parts[2].replace(/""/g, '"');
-                            } else {
-                                // Fallback se il formato non è standard (es. editato a mano senza quotes)
-                                // Questo è rischioso, ma proviamo
-                                const simpleParts = rest.split(',');
-                                name = simpleParts[0];
-                                ingStr = simpleParts.slice(1).join(',');
-                            }
-
-                            // Parsare ingredienti: "Pasta 80g; Pomodoro 100ml"
-                            const ingredients = [];
-                            if (ingStr) {
-                                const ingItems = ingStr.split(';');
-                                ingItems.forEach(item => {
-                                    item = item.trim();
-                                    // Regex: Nome QuantitàUnità (es. "Pasta 80g" o "Olio 10ml")
-                                    // Cerca l'ultima parte numerica+testo
-                                    const match = item.match(/^(.*)\s+(\d+(?:[.,]\d+)?)([a-zA-Z]+)$/);
-                                    if (match) {
-                                        ingredients.push({
-                                            name: match[1].trim(),
-                                            qty: parseFloat(match[2].replace(',', '.')),
-                                            unit: match[3]
-                                        });
-                                    }
-                                });
-                            }
-
-                            if (name) {
-                                newRecipes.push({
-                                    id: id || Date.now() + i, // Mantieni ID o genera nuovo
-                                    type: type.toString(),
-                                    name: name,
-                                    ingredients: ingredients
-                                });
-                            }
-                        }
-
-                        if (newRecipes.length > 0) {
-                            setRecipes(newRecipes);
-                            saveToCloud({ recipes: newRecipes });
-                            alert(`Importazione completata! Caricate ${newRecipes.length} ricette.`);
-                        } else {
-                            alert("Nessuna ricetta valida trovata nel file CSV.");
-                        }
-
-                    } catch (err) {
-                        console.error("Errore importazione CSV:", err);
-                        alert("Errore durante la lettura del file CSV.");
-                    }
-                    e.target.value = null; // Reset input
-                };
-                reader.readAsText(file);
-            };
-
             const handlePrint = () => {
                 const printArea = document.getElementById('print-area');
                 const dates = getDatesOfWeek(currentWeekStart);
@@ -2636,18 +2539,20 @@
                     });
                 });
 
-                // Sottrai quantita disponibili in dispensa
-                Object.values(needed).forEach(item => {
-                    const nameLower = item.name.toLowerCase();
-                    const matches = pantry.filter(p =>
-                        p.name.toLowerCase() === nameLower && p.unit === item.unit
-                    );
-                    const available = matches.reduce((sum, m) => sum + m.qty, 0);
-                    if (available > 0) {
-                        item.available = available;
-                        item.qty = Math.max(0, item.qty - available);
-                    }
-                });
+                // Sottrai quantita disponibili in dispensa (solo se il modulo dispensa e attivo)
+                if (PANTRY_ENABLED) {
+                    Object.values(needed).forEach(item => {
+                        const nameLower = item.name.toLowerCase();
+                        const matches = pantry.filter(p =>
+                            p.name.toLowerCase() === nameLower && p.unit === item.unit
+                        );
+                        const available = matches.reduce((sum, m) => sum + m.qty, 0);
+                        if (available > 0) {
+                            item.available = available;
+                            item.qty = Math.max(0, item.qty - available);
+                        }
+                    });
+                }
 
                 return Object.values(needed)
                     .filter(item => item.qty > 0)
@@ -2656,6 +2561,7 @@
 
             // Prodotti completamente coperti dalla dispensa
             const pantryCovered = useMemo(() => {
+                if (!PANTRY_ENABLED) return [];
                 const needed = {};
                 plan.forEach(slot => {
                     if (!slot.tracks) return;
@@ -2715,9 +2621,11 @@
                                 <button role="tab" aria-selected={activeTab === 'shop'} onClick={() => setActiveTab('shop')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'shop' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.ShoppingCart /> Spesa
                                 </button>
+                                {PANTRY_ENABLED && (
                                 <button role="tab" aria-selected={activeTab === 'pantry'} onClick={() => setActiveTab('pantry')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'pantry' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.Pantry /> Dispensa
                                 </button>
+                                )}
                                 <button role="tab" aria-selected={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'recipes' ? 'bg-slate-800 text-white' : 'hover:bg-slate-50 text-slate-600'}`}>
                                     <Icons.BookOpen /> Ricette
                                 </button>
@@ -2768,11 +2676,10 @@
                                     deleteRecipe={deleteRecipe}
                                     onAddRecipe={handleAddRecipe}
                                     onEditRecipe={handleEditRecipe}
-                                    onImportRecipes={handleImportRecipes}
                                     openAIModal={openAIModal}
                                 />
                             }
-                            {activeTab === 'pantry' && <PantryView
+                            {PANTRY_ENABLED && activeTab === 'pantry' && <PantryView
                                 pantry={pantry}
                                 onAdd={addToPantry}
                                 onRemove={removeFromPantry}
@@ -2782,7 +2689,7 @@
                                 allIngredients={allIngredientNames}
                             />}
                             {activeTab === 'dev' && <SviluppoView />}
-                            {activeTab === 'settings' && <SettingsView dietPlans={dietPlans} onSavePlans={saveDietPlans} resetData={resetData} />}
+                            {activeTab === 'settings' && <SettingsView dietPlans={dietPlans} onSavePlans={saveDietPlans} resetData={resetData} tasteProfile={tasteProfile} onSaveTaste={saveTasteProfile} />}
                         </main>
                     </div>
                     
@@ -2799,6 +2706,7 @@
                         recipes={recipes}
                         onAddRecipes={addGeneratedRecipes}
                         dietPlans={dietPlans}
+                        tasteProfile={tasteProfile}
                         onOpenSettings={() => setActiveTab('settings')}
                         initialIngredients={aiRecipePrefilledIngredients}
                     />
@@ -2808,6 +2716,7 @@
                         onClose={() => setIsAIWeeklyModalOpen(false)}
                         recipes={recipes}
                         dietPlans={dietPlans}
+                        tasteProfile={tasteProfile}
                         pantry={pantry}
                         onApplyPlan={(newPlan) => {
                             const newWeeklyPlans = { ...weeklyPlans, [currentWeekKey]: newPlan };
