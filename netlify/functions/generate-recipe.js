@@ -68,6 +68,22 @@ UNITÀ: "g", "ml", "pz", "qb"`;
         if (parts.length > 0) {
             prompt += `\n\nPROFILO GUSTI DELL'UTENTE (rispettalo SEMPRE, in particolare le cose da evitare):\n- ${parts.join('\n- ')}`;
         }
+
+        if (Array.isArray(tp.prep) && tp.prep.length > 0) {
+            const rules = tp.prep
+                .filter(r => r && r.ingredient && String(r.ingredient).trim())
+                .map(r => {
+                    let s = `${String(r.ingredient).trim()}`;
+                    if (r.ok && String(r.ok).trim()) s += ` → SOLO: ${String(r.ok).trim()}`;
+                    if (r.no && String(r.no).trim()) s += ` | MAI: ${String(r.no).trim()}`;
+                    return s;
+                });
+            if (rules.length > 0) {
+                prompt += `\n\nCONSISTENZE E PREPARAZIONI — VINCOLO ASSOLUTO (preferenze sensoriali dell'utente, prioritarie su tutto il resto):
+Per gli ingredienti elencati qui sotto, usa ESCLUSIVAMENTE le preparazioni indicate dopo "SOLO" ed evita SEMPRE quelle indicate dopo "MAI". Questo riguarda taglio, cottura e consistenza finale. Se una ricetta richiederebbe una preparazione vietata per uno di questi ingredienti, cambia metodo di preparazione oppure NON usare quell'ingrediente. Indica nel campo "name" o "tip" il modo di preparazione quando rilevante.
+- ${rules.join('\n- ')}`;
+            }
+        }
     }
 
     prompt += `
