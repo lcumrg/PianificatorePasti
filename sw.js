@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pianificatore-pasti-v4';
+const CACHE_NAME = 'pianificatore-pasti-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -9,7 +9,7 @@ const STATIC_ASSETS = [
 const CDN_ASSETS = [
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js'
+  'https://unpkg.com/@babel/standalone@7.29.7/babel.min.js'
 ];
 
 // Install: cache risorse statiche
